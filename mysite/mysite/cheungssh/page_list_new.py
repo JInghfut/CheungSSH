@@ -2,7 +2,7 @@
 
 
 def pagelist(request,datalist):
-	info={"msgtype":"ERR"}
+	info={"status":False}
 	username=request.user.username
 	pagenum=request.GET.get('pagenum')
 	pagesize=request.GET.get('pagesize')
@@ -40,7 +40,7 @@ def pagelist(request,datalist):
 		else:
 			totalnum=0
 		info["totalnum"]=totalnum
-		info["msgtype"]="OK"
+		info["status"]=True
 	except Exception,e:
 		info["content"]=str(e)
 	return info

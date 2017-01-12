@@ -1,36 +1,59 @@
 #coding:utf-8
-from django.contrib.auth.models import User
+from cheungssh_active_ssh import CheungSSHActiveSSH
+from network_topology import Topology
+import cheungssh_page_audit
+from cheungssh_login import CheungSSHLoginUserNotify
+from cheungssh_app_admin import CheungSSHAppAdmin
+import get_file_check
+from deployment_protocol.cheungssh_deployment_admin import DeploymentAdmin
+from remote_file_admin import RemoteFileAdmin
+from cheungssh_ssh_check import CheungSSHCheck
+from cheungssh_error import CheungSSHError
+from client_info import resolv_client
+from django.contrib.auth.models import User,Group
 from django.http import  HttpResponse,HttpResponseRedirect
 from django.shortcuts import render_to_response
 from django.contrib.auth import authenticate,login,logout
 from mysite.cheungssh.models import ServerConf
-import FileTransfer,path_search,crond_record
+import path_search,crond_record
 import sys,os,json,random,commands,queue_task,time,threading
 from permission_check import permission_check
+from Return_http import ajax_http
+from parameters import parameters
+from cheungssh_thread_queue import CheungSSHPool
+import cheungssh_modul_controler
 sys.path.append('/home/cheungssh/bin')
-import IP,hwinfo,DataConf,ssh_check
+sys.path.append('/home/cheungssh/mysite/mysite/cheungssh')
+sys.path.append('/home/cheungssh/mysite/mysite/cheungssh/deployment_protocol')
+from cheungssh_script import CheungSSHScript
+import IP
 import cheungssh_web,login_check
 import re,platform
-upload_dir="/home/cheungssh/upload"
-downloaddir='/home/cheungssh/download'
-keyfiledir="/home/cheungssh/keyfile"
-scriptfiledir="/home/cheungssh/scriptfile"
+from cheungssh_file_admin import FileAdmin
+import global_parameters,cheungssh_settings
 reload(sys)
 sys.setdefaultencoding('utf8')
 from django.core.cache import cache
 from django.views.generic.base import View 
 import login_check
-import db_to_redis_allconf
-from page_list import page_list
-from page_list_new import pagelist
-from black_cmd import black_cmd_check
-crond_file="/home/cheungssh/crond/crond_file"
-cmdfile="/home/cheungssh/data/cmd/cmdfile"
-import redis_to_redis
+from black_command import black_command_check
+#from dashboard import dashboard
+#from localhost_dashboard_process  import process
+from assets.custom_assets_class import custom_assets
+
+REDIS=cache.master_client
+from cheungssh_file_transfer import CheungSSHFileTransfer
+from cheungssh_thread_queue import CheungSSHThreadAdmin
+from cheungssh_docker_controler import DockerControler
+import cheungssh_docker_admin
+
+def cheungssh_redirect(request):
+	return HttpResponseRedirect("/cheungssh/static/html/cheungssh.html")
 def cheungssh_index(request):
-	return render_to_response("cheungssh.html")
+	return HttpResponseRedirect("/cheungssh/static/html/cheungssh.html")
+@ajax_http
 def cheungssh_login(request):
-	info={"msgtype":"ERR","content":"","auth":"no"}
+	info={"status":False,"content":""}
 	logintime=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
 	client_ip=request.META['REMOTE_ADDR']
 	limit_ip='fail.limit.%s'%(client_ip)
@@ -39,11 +62,10 @@ def cheungssh_login(request):
 	ip_threshold=ip_threshold(ip_threshold_r)
 	if cache.has_key(limit_ip):
 		if cache.get(limit_ip)>ip_threshold:  
-			info['content']="无效登陆"
+			info['content']="系统已经拒绝您登陆,请联系管理员!"
 			cache.incr(limit_ip)  
 			cache.expire(limit_ip,8640000)
-			info=json.dumps(info)
-			return HttpResponse(info)
+			return info
 	if request.method=="POST":
 		username = request.POST.get("username", '非法用户名')
 		password = request.POST.get("password", False)
@@ -51,21 +73,19 @@ def cheungssh_login(request):
 		user=authenticate(username=username,password=password)
 		if user is not None:
 			if user.is_active:
-				print "成功登陆"
-				
 				login(request,user)
 				request.session["username"]=username
-				info["msgtype"]="OK"
-				info['auth']="yes"
-				info['content']="成功登录"
+				info["status"]=True
 				request.session.set_expiry(0)    
 				if cache.has_key(limit_ip):cache.delete(limit_ip)
-				print request.COOKIES,request.session.keys(),request.session['_auth_user_id']
-				info['sid']=str(request.session.session_key)
+				login_info=resolv_client(request)
+				login_info["sid"]=str(request.session.session_key)
+				CheungSSHLoginUserNotify.add_login_user(login_info)
+				login_info=json.dumps(login_info,encoding="utf8",ensure_ascii=False)
+				REDIS.lpush("CHB-R00000000101",login_info)
 			else:
 				
 				info["content"]="用户状态无效"
-				print info["content"]
 		else:
 			if cache.has_key(limit_ip):
 				cache.incr(limit_ip)
@@ -76,35 +96,19 @@ def cheungssh_login(request):
 		info["IP-Locate"]=IP.find(client_ip)
 		info["username"]=username
 		info["logintime"]=logintime
-		redis_to_redis.set_redis_data('sign.record',json.dumps(info,encoding='utf-8',ensure_ascii=False)) 
 		
 	else:
 		info["content"]="No Get"
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "POST"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return info
 @login_check.login_check('登录记录',False)
 @permission_check('cheungssh.show_sign_record')
+@ajax_http
 def show_sign_record(request):
-	callback=request.GET.get('callback')
 	datainfo=redis_to_redis.get_redis_data('sign.record','list')  
 	info=pagelist(request,datainfo["content"])
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "POST"
-        response["Access-Control-Allow-Credentials"] = "true"
-        return response
+        return info
 def cheungssh_logout(request):
-	info={'msgtype':'OK'}
+	info={'status':'True'}
 	if request.user.is_authenticated():
 		logout(request)
 	info=json.dumps(info)
@@ -114,387 +118,355 @@ def cheungssh_logout(request):
 	else:
 		info="%s(%s)"  % (callback,info)
 	return HttpResponse(info)
-@login_check.login_check('文件下载到本地')
-@permission_check('cheungssh.local_file_download')
-def download_file(request):
-	info={"msgtype":"ERR","content":""}
-	file=request.GET.get('file')
-	callback=request.GET.get('callback')
-	try:
-		file=eval(file)
-		if not  type([])==type(file):
-			info['content']='传入的参数不是一个[]'
-		else:
-			info['msgtype']='OK'
-	except Exception,e:
-		info["content"]="传入的参数格式错误"
-		
-	newfile=[]
-	for f in file:
-		tf=os.path.basename(f.rstrip('/'))  
-		newfile.append(tf)
-	os.chdir('/home/cheungssh/download/')
-	downfile="%s.tar.gz" %str(random.randint(90000000000000000000,99999999999999999999))
-	if file:
-		cmd="tar zcf  /home/cheungssh/download/%s  " % downfile +  " ".join(newfile)
-		T=commands.getstatusoutput(cmd)
-		if not  T[0]==0:
-			info['content']=T[1]
-			info['msgtype']='ERR'
-			os.system("/bin/rm %s" % downfile)
-		else:
-			info["msgtype"]='OK'
-			server_head=request.META['HTTP_HOST']
-			info["url"]="http://%s/cheungssh/download/file/%s" % (server_head,downfile)
-	else:
-		info['msgtype']='ERR'
-		info['content']="您尚未指定要下载的有效文件,请确认此前下载是否成功"
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
 
-	
-@login_check.login_check('密钥管理')
-def keyshow(request):
-	info={"msgtype":"ERR","content":""}
-	callback=request.GET.get('callback')
-	show_type=request.GET.get('show_type')
+@login_check.login_check('删除SSHKey')
+@permission_check('cheungssh.delete_keyfile')
+@ajax_http
+def delete_keyfile(request):
+	username=request.user.username
+	cheungssh_info={"status":False,"content":""}
 	try:
-		content=cache.get('keyfilelog')
-		if content:
-			content=content.values()
+		parameters=request.GET.get("parameters")
+		try:
+			parameters=json.loads(parameters)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000022")
+		if not type({})== type(parameters):raise CheungSSHError("CHB0000000022")
+		owner=parameters["username"]
+		filename=parameters["filename"]
+		if request.user.is_superuser:
+			
+			full_path=os.path.join(cheungssh_settings.keyfile_dir,username,filename)
+			
 		else:
-			content=[]
-		print content,77777777777
-		if show_type=='list':
-			keyfile_list={}
-			for a in content:
-				keyfile_list[a['fid']]=a['filename']
-			info['content']=keyfile_list
-		else:
-			info["content"]=content
-		info['msgtype']="OK"
-	except Exception,e:
-		info["content"]=str(e)
-		print e
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('删除密钥')
-@permission_check('cheungssh.key_del')
-def delkey(request):
-	info={"msgtype":"ERR","content":"","path":""}
-	callback=request.GET.get('callback')
-	fid=request.GET.get('fid')
-	try:
-		alllogline=cache.get("keyfilelog")
-		if alllogline:
-			keyfile=os.path.join(keyfiledir,alllogline[fid]['filename'])
-			try:
-				os.remove(keyfile)
-			except:
+			
+			if not username==owner:
+				raise CheungSSHError("CHB0000000023")
+			else:
+				
 				pass
-			del alllogline[fid]
-			cache.set('keyfilelog',alllogline,3600000)
-			info["msgtype"]="OK"
+		if not os.path.isfile(full_path):
+			
+			pass
+		else:
+			os.remove(full_path) 
+		line={"owner":username,"keyfile":filename}
+		line=json.dumps(line,encoding="utf8",ensure_ascii=False)
+		REDIS.lrem("keyfile.list",line,0) 
+		cheungssh_info["status"]=True
 	except Exception,e:
-		info["content"]=str(e)
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-		
-@login_check.login_check('PC上传') 
-@permission_check('cheungssh.local_file_upload') 
-def upload_file_test(request):
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('本地上传文件')
+@ajax_http
+def upload_keyfile(request):
+	username=request.user.username
+	cheungssh_info={"status":True,"content":""}
 	fid=str(random.randint(90000000000000000000,99999999999999999999))
-	info={"msgtype":"ERR","content":"","path":""}
-	upload_type=request.GET.get('upload_type')
+	info={"status":False,"content":"","path":""}
+	if request.method=="POST":
+		filename=str(request.FILES.get("file"))
+		file_content=request.FILES.get('file').read()
+		os.chdir(cheungssh_settings.keyfile_dir)
+		
+		full_dir=os.path.join(cheungssh_settings.keyfile_dir,username)
+		if not os.path.isdir(full_dir):
+			
+			os.mkdir(username)
+		os.chdir(username)
+		with open(filename.encode('utf8'),"wb") as f:
+			f.write(file_content)
+		line={"owner":username,"keyfile":filename}
+		line=json.dumps(line,encoding="utf8",ensure_ascii=False)
+		REDIS.rpush("keyfile.list",line)
+	return cheungssh_info
+@ajax_http
+def show_keyfile_list(request):
+	cheungssh_info={"status":False,"content":[]}
+	username=request.user.username
+	try:
+		data=REDIS.lrange("keyfile.list",0,-1)
+		for _line in data:
+			line=json.loads(_line)
+			if username==line["owner"] or request.user.is_superuser:
+				
+				cheungssh_info["content"].append(line)
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('PC上传') 
+
+
+@ajax_http
+def upload_file_test(request):
+	cheungssh_info={"status":True,"content":""}
+	fid=str(random.randint(90000000000000000000,99999999999999999999))
 	username=request.user.username
 	if request.method=="POST":
 		filename=str(request.FILES.get("file"))
-		filecontent=request.FILES.get('file').read()
-		filesize=  "%sKB" % (float(request.FILES.get('file').size)/float(1024))
-		alllogline=cache.get('keyfilelog')
-		if not alllogline:
-			alllogline={}
-		logline={}
-		if upload_type=='keyfile':
-			logline['time']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-			logline['filename']=filename
-			logline['username']=username
-			logline['fid']=fid
-			alllogline[fid]=logline
-			cache.set('keyfilelog',alllogline,36000000000000)
-			file_position="%s/%s" % (keyfiledir,filename)
-		elif upload_type=='script':
-			logline['time']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-			logline['filename']=filename
-			logline['username']=username
-			scriptlogline=cache.get('scriptlogline')   
-			if scriptlogline is None:scriptlogline={}
-			scriptlogline[filename]=logline
-			cache.set('scriptlogline',scriptlogline,36000000000000)
-			file_position="%s/%s" % (scriptfiledir,filename)
-			info['content']=logline
-		else:
-			file_position="%s/%s" % (upload_dir,filename)
-		try:
-			t=open(file_position,"wb")
-			t.write(filecontent)
-			t.close()
-			info["msgtype"]="OK"
-			info["path"]=file_position
-			if upload_type=="keyfile":info=logline
-		except Exception,e:
-			print e
-			info["content"]=str(e)
-	info=json.dumps(info)
-	response=HttpResponse(info)
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "POST"
-        response["Access-Control-Allow-Credentials"] = "true"
-	response["Access-Control-Allow-Headers"]="Content-Type"
+		file_content=request.FILES.get('file').read()
+		_dir=os.path.join(cheungssh_settings.upload_dir,username)
+		if not os.path.isdir(_dir):
+			os.mkdir(_dir)
+		dfile=os.path.join(_dir,filename)
+		with open(dfile.encode('utf8'),"wb") as f:
+			f.write(file_content)
+	return cheungssh_info
+@ajax_http
+def delete_script(request):
+	username=request.user.username
+	filename=request.GET.get("filename")
+	cheungssh_info={"status":False,"content":""}
+	full_path=os.path.join(cheungssh_settings.script_dir,username,filename)
 	try:
-		local_upload_all=cache.get('local_upload')
-		client_ip=request.META['REMOTE_ADDR']
-		if local_upload_all is None:local_upload_all={}
-		local_upload={}
-		local_upload['username']=username
-		local_upload['time']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-		local_upload['ip']=client_ip
-		local_upload['filename']=filename
-		local_upload['filsize']=filesize
-		local_upload['fid']=fid
-		local_upload_all[fid]=local_upload
-		cache.set('local_upload',local_upload_all,3600000000)
+		data=REDIS.hget("scripts",filename)
+		if data is None:
+			pass
+		else:
+			data=json.loads(data)
+			if filename==data["script"] and (request.user.is_superuser or username==data["owner"]):
+				REDIS.hdel("scripts",filename)
+				try:
+					os.remove(full_path)
+					print "delte.."
+				except:
+					pass
+		cheungssh_info["status"]=True
 	except Exception,e:
-		info['content']=str(e)
-		print "发生错误",e
-	print response
-	return response
-####
-@login_check.login_check('远程下载')
-@permission_check('cheungssh.transfile_download')
-def filetrans_remote_download(request):
-	fid=str(random.randint(90000000000000000000,99999999999999999999))
-	info={"msgtype":"OK","fid":fid,"status":"running"}
-	host=request.GET.get('host')
-	callback=request.GET.get('callback')
-	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	redis_info={"msgtype":"OK","content":"","progres":"0",'status':"running","lasttime":lasttime}
-	cache.set("info:%s" % (fid),redis_info,360)
+		cheungssh_info["content"]=str(e)
+		cheungssh_info["status"]=False
+	return cheungssh_info
+@login_check.login_check('查看脚本清单')
+@permission_check('cheungssh.scripts_list')
+@ajax_http
+def scripts_list(request):
 	username=request.user.username
-	FileTransfer.getconf(host,fid,username,"download")
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-####
-@login_check.login_check('远程上传')
-@permission_check('cheungssh.transfile_upload')
-def filetrans_remote_upload(request):
-	fid=str(random.randint(90000000000000000000,99999999999999999999))
-	info={"msgtype":"OK","fid":fid,"status":"running"}
-	host=request.GET.get('host')
-	callback=request.GET.get('callback')
-	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	redis_info={"msgtype":"OK","content":"","progres":"0",'status':"running","lasttime":lasttime}
-	cache.set("info:%s" % (fid),redis_info,360)
+	cheungssh_info={"status":False,"content":""}
+	try:
+		
+		data=REDIS.hgetall("scripts")
+		for filename in data.keys():
+			_data=json.loads(data[filename])
+			if request.user.is_superuser or username==_data["owner"]:
+				data[filename]=_data
+		cheungssh_info["content"]=data
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["content"]=str(e)
+		cheungssh_info["status"]=False
+	return cheungssh_info
+
+@login_check.login_check('上传脚本')
+@ajax_http
+def upload_script(request):
+	cheungssh_info={"status":False,"content":""}
 	username=request.user.username
-	FileTransfer.getconf(host,fid,username,"upload")
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-def haha(request):
-	return HttpResponse('haha')
-@login_check.login_check('命令搜索',False)
+	if request.method=="POST":
+		try:
+			if len(REDIS.hgetall("scripts"))>=9:raise CheungSSHError("CHB-BUSINESS-LIMIT")
+			filename=str(request.FILES.get("file"))
+			_data=REDIS.hget("scripts",filename)
+			if _data is None:
+				pass
+			else:
+				data=json.loads(_data)
+				if filename==data["script"]:
+					if username==data["owner"]:
+						pass
+					else:
+						raise CheungSSHError("您的操作不被允许!其他账户下存在同名脚本!")
+			file_content=request.FILES.get('file').read()
+			parent_dir=os.path.join(cheungssh_settings.script_dir,username)
+			if not os.path.isdir(parent_dir):os.mkdir(parent_dir)
+			script=os.path.join(parent_dir,filename)
+			with open(script.encode('utf8'),"wb") as f:
+				f.write(file_content)
+			cheungssh_info["content"]={
+				"script":filename,
+				"owner":username,
+				"time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),
+			}
+			
+			REDIS.hset("scripts",filename,json.dumps(cheungssh_info["content"],encoding="utf8",ensure_ascii=False))
+			cheungssh_info["status"]=True
+		except Exception,e:
+			cheungssh_info["content"]=str(e)
+			cheungssh_info["status"]=False
+	return cheungssh_info
+#@login_check.login_check('命令搜索',False)
+@ajax_http
 def pathsearch(request):
-	info={'msgtype':"OK","content":""}
-	callback=request.GET.get('callback')
+	info={'status':True,"content":""}
 	path=request.GET.get('path')
 	pathinfo=path_search.get_query_string(path)
 	info['content']=pathinfo
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+	return info
 
-
-@login_check.login_check('配置修改')
-@permission_check('cheungssh.config_modify')
+@login_check.login_check('服务器信息修改')
+@permission_check('cheungssh.modify_server')
+@ajax_http
 def config_modify(request):
-	callback=request.POST.get('callback')
-	host=request.POST.get('host')
+	cheungssh_info={"content":"该服务器不存在 !","status":False}
+	host=request.GET.get('host')
 	username=request.user.username
-	info={'msgtype':'ERR'}
+	is_super=request.user.is_superuser
 	try:
-		host=eval(host)
-		if not type({})==type(host):
-			print '11111111111',host
-			raise IOError('数据格式错误，应该是一个{}')
-		t_allgroupall=cache.get('allconf')
-		id=host['id']
-		if t_allgroupall:
-			for b in host.keys():
-				if b=="ip":
-					host[b]==host['ip'].split('@')[-1]
-				if b=='id'  or not host[b]:
-					
-					continue
-				else:
-					t_allgroupall['content'][id][b]=host[b]
-				info['msgtype']='OK'
-				cache.set('allconf',t_allgroupall,36000000000000)
-		else:
-			info['content']='未装载配置'
-	except KeyError:
-		info['content']="配置不存在"
-		print '配置不存在'
-	except Exception,e:
-		info['content']=str(e)
-		print "错误",e
-	info=json.dumps(info,encoding='utf-8')
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('创建服务器')
-@permission_check('cheungssh.config_add')
-def config_add(request):
-	callback=request.POST.get('callback')   
-	host=request.POST.get('host')
-	username=request.user.username
-	info={'msgtype':'ERR'}
-	id=int(random.randint(90000000000,99999999999))
-	id=json.dumps(id)
-	try:
-		host=eval(host)
-		if not type({})==type(host):raise IOError('数据格式错误，应该是一个{}')
-		t_allgroupall=cache.get('allconf')
-		host['id']=id 
-		host['owner']=username
-		if not host.has_key('password'):host['password']=""
-		if t_allgroupall:
-			t_allgroupall['content'][id]=host
-		else:
-			t_allgroupall={"msgtype":"OK","content":{}}
-			t_allgroupall['content'][id]=host
-		info['msgtype']='OK'
-		info['id']=id
-		cache.set('allconf',t_allgroupall,8640000000)
-	except Exception,e:
-		info['content']=str(e)
-	info=json.dumps(info,encoding='utf-8')
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('删除服务器')
-@permission_check('cheungssh.config_del')
-def config_del(request):
-	info={'msgtype':'ERR'}
-	try:
-		host=request.GET.get('host')
-		callback=request.GET.get('callback')
-		host=eval(host)
-		if not type([])==type(host):raise IOError('参数格式错误，应该是一个[]')  
-		username=request.user.username
-		info={'msgtype':'ERR'}
 		try:
-			t_allgroupall=cache.get('allconf')
-			if t_allgroupall:
-				for id in host:
-					id=str(id)
-					if username==t_allgroupall['content'][id]['owner'] or request.user.is_superuser:
-						try:
-							del t_allgroupall['content'][id]
-						except KeyError:
-							pass
-						info['msgtype']='OK'
-					else:
-						info['content']="非法操作"
-						break
-			cache.set('allconf',t_allgroupall,360000000000)
-		except KeyError:
-			info['msgtype']='OK'
+			host=json.loads(host)
 		except Exception,e:
-			info['content']=str(e)
-			print "错误",e,host,type(host),id,t_allgroupall
+			raise CheungSSHError("CHB0000000008")
+		servers_list=REDIS.lrange("servers.config.list",0,-1)
+		if servers_list is None:raise CheungSSHError("当前系统没有服务器")
+		else:
+			id=host["id"]
+			for _s in servers_list:
+				
+				s=json.loads(_s)
+				if str(id)==s["id"]:
+					if username==host["owner"] or is_super:
+						
+						if host["password"]         == "******":
+							host["password"]=s["password"]
+						if host["sudo_password"]    == "******":
+							host["sudo_password"]=s["sudo_password"]
+						if host["su_password"]      == "******":
+							host["su_password"]=s["su_password"]
+						if host["keyfile_password"] == "******":
+							host["keyfile_password"]=s["keyfile_password"]
+						REDIS.lrem("servers.config.list",_s,0) 
+						host=json.dumps(host,encoding="utf8",ensure_ascii=False)
+						REDIS.rpush("servers.config.list",host) 
+						cheungssh_info["status"]=True
+						cheungssh_info["content"]=""
+						break
 	except Exception,e:
-		info['content']=str(e)
-	info=json.dumps(info,encoding='utf-8')
-	if callback is None:
-		info=info
+		cheungssh_info['content']=str(e)
+		cheungssh_info["status"]=False
+	return cheungssh_info
+@login_check.login_check('创建服务器')
+@permission_check('cheungssh.create_server')
+@ajax_http
+def config_add(request):
+	host =request.GET.get("host")
+        cheungssh_info={"content":"","status":False}
+	id=str(random.randint(90000000000,99999999999))
+	client_info=resolv_client(request)
+	try:
+		try:
+			host=json.loads(host)
+		except Exception,e:
+			print host
+			raise CheungSSHError("CHB0000000006")
+		host["id"]=id
+		cheungssh_info["content"]=id 
+		host["owner"]=client_info["owner"]
+		host=json.dumps(host,encoding="utf8",ensure_ascii=False) 
+		REDIS.rpush("servers.config.list",host)
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info['content']=str(e)
+	return cheungssh_info
+@login_check.login_check('查看服务器配置',False)
+
+@ajax_http
+def load_servers_list(request):
+	cheungssh_info={"content":[],"status":True}
+	servers_list=REDIS.lrange("servers.config.list",0,-1)
+	username=request.user.username
+	is_super=request.user.is_superuser
+	if servers_list is None:
+		cheungssh_info["content"]=[] 
 	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+		
+		for _line in servers_list:
+			line=json.loads(_line)
+			if username==line["owner"]  or is_super :
+				
+				line["password"]        ="******"
+				line["su_password"]     ="******"
+				line["sudo_password"]   ="******"
+				line["keyfile_password"]="******"
+				
+				status=REDIS.get("server.status.%s" % line["id"])
+				
+				if status is None:
+					status={
+						"status":"checking",
+						"content":"检查中"
+					}
+				else:
+					status=json.loads(status)
+				line["status"]=status
+				cheungssh_info["content"].append(line)
+	return cheungssh_info
+				
+		
+			
+@login_check.login_check('删除服务器')
+@permission_check('cheungssh.delete_server')
+@ajax_http
+def config_del(request):
+	cheungssh_info={"content":"","status":False}
+	hosts=request.GET.get("hosts") 
+	is_super=request.user.is_superuser
+	username=request.user.username
+	try:
+		try:
+			hosts=json.loads(hosts) 
+			if not type([])==type(hosts)  or len(hosts)==0:raise CheungSSHError("CHB0000000007-1")
+		except Exception,e:
+			raise CheungSSHError("CHB0000000007")
+		servers_list=REDIS.lrange("servers.config.list",0,-1)
+		for h in hosts:
+			for _s in servers_list:
+				s=json.loads(_s)
+				if str(h)==str(s["id"]):
+					if username==s["owner"] or is_super:
+						
+						
+						REDIS.lrem("servers.config.list",_s,0) 
+					else:
+						raise CheungSSHError("您无权删除该服务器!")
+					break
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info['content']=str(e)
+	return cheungssh_info
 
 @login_check.login_check('删除计划任务')
 @permission_check('cheungssh.crond_del')
+@ajax_http
 def delcrondlog(request):
-	callback=request.GET.get('callback')
 	fid=request.GET.get('fid')
-	info={"msgtype":"ERR","content":""}
+	info={"status":False,"content":""}
 	delcrond_log=crond_record.crond_del(fid)
 	if delcrond_log[0]:
-		info['msgtype']='OK'
+		info['status']='True'
 	else:
 		info['content']=delcrond_log[1]
-	info=json.dumps(info,encoding='utf-8')
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+	return info
 @login_check.login_check('查看计划任务')
 @permission_check('cheungssh.crond_show')
+@ajax_http
 def showcrondlog(request):
-	callback=request.GET.get('callback')
-	info={"msgtype":"OK","content":""}
+	info={"status":True,"content":""}
 	crondlog_log=crond_record.crond_show(request)[1]
 	info['content']=crondlog_log
-	info=json.dumps(info,encoding='utf-8')
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-	
+	return info
 @login_check.login_check('创建计划任务')
 @permission_check('cheungssh.crond_create')
+@ajax_http
 def crontab(request):
 	runmodel="/home/cheungssh/mysite/mysite/cheungssh/"
-	callback=request.GET.get('callback')
 	value=request.GET.get('value')
 	runtime=request.GET.get('runtime')
 	runtype=request.GET.get('type')
-	info={"msgtype":"ERR","content":""}
+	info={"status":False,"content":""}
 	if platform.dist()[0]=='Ubuntu':    
 		crond_status=(0,'')
 	else:
@@ -528,7 +500,7 @@ def crontab(request):
 					a.close()
 					crond_write=commands.getstatusoutput("""/usr/bin/crontab %s""" % (crond_file))
 					if int(crond_write[0])==0:
-						info['msgtype']='OK'
+						info['status']='True'
 						crond_record.crond_record(value_to_log)
 					else:
 						delcmd=commands.getstatusoutput("""sed -i '/%s/d' %s"""  % (fid,crond_file))
@@ -543,16 +515,16 @@ def crontab(request):
 						value_to_log[value['fid']]=value
 						cmdcontent= "\n%s#%s#%s\n"  %(hostinfo['cmd'],hostinfo['id'],value['fid'])
 						try:
-							with open(cmdfile,'a') as f:
+							with open(cmdfile.encode('utf8'),'a') as f:
 								f.write(cmdcontent) 
 							crondcmd=""" %s %s %s\n"""  % (runtime,'/home/cheungssh/bin/cheungssh_web.py',fid)
 							try:
-								with open(crond_file,'a') as f:
+								with open(crond_file.encode('utf8'),'a') as f:
 									f.write(crondcmd)
 							
 								crond_write=commands.getstatusoutput("""/usr/bin/crontab %s""" % (crond_file))
 								if int(crond_write[0])==0:
-									info['msgtype']='OK'
+									info['status']='True'
 									crond_record.crond_record(value_to_log) 
 								else:
 									print "加入计划任务失败",crond_write[1],crond_write[0]
@@ -573,254 +545,173 @@ def crontab(request):
 		except Exception,e:
 			print "发生错误",e
 			info['content']=str(e)
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+	return info
 @login_check.login_check('',False)
+@ajax_http
 def local_upload_show(request):
-	info={'msgtype':'ERR','content':[]}
-	callback=request.GET.get('callback')
+	info={'status':'False','content':[]}
 	local_upload_all=cache.get('local_upload')
 	if local_upload_all:
 		info['content']=local_upload_all.values()
-	info=json.dumps(info)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('执行命令')
-@permission_check('cheungssh.excute_cmd')
-@black_cmd_check
-def excutecmd(request):
-	info={'msgtype':'ERR','content':[]}
-	if request.method=='POST':
-		callback=request.POST.get('callback')
-		cmd=request.POST.get('cmd')
-		rid=request.POST.get("rid")
-	else:
-		callback=request.GET.get('callback')
-		cmd=request.GET.get('cmd')
-		rid=request.GET.get("rid")
-		
-	ie_key=rid
-	excute_time=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-	client_ip=request.META['REMOTE_ADDR']
-	client_ip_locat=IP.find(client_ip)
-	username=request.user.username
+	return info
+
+
+@login_check.login_check('',False)
+@ajax_http
+def get_command_result(request):
+	cheungssh_info={"content":{"content":"","stage":"running","status":None}, "status":True,"progress":0}
+	tid=request.GET.get("tid")
+	sid=request.GET.get("sid")
+	content="" 
 	try:
-		tid=str(random.randint(90000000000000000000,99999999999999999999))
-		server=eval(cmd)
-		cmd=server['cmd']
-		selectserver=server['selectserver']
-		if not selectserver:raise IOError("没有选择执行主机")
-		Data=DataConf.DataConf()
-		a=threading.Thread(target=cheungssh_web.main,args=(cmd,ie_key,selectserver,Data,tid))
-		a.start()
-		
-		cmd_history=cache.get('cmd_history')
-		if cmd_history is None:cmd_history=[]
-		allconf=cache.get('allconf')
-		allconf_t=allconf['content']
-		for sid in selectserver.split(','):
-			server_ip=allconf_t[sid]['ip'] 
-			cmd_history_t={
-					"tid":tid,
-					"excutetime":excute_time,
-					"IP":client_ip,
-					"IPLocat":client_ip_locat,
-					"user":username,
-					"servers":server_ip,
-					"cmd":cmd
-				}
-			cmd_history.insert(0,cmd_history_t)
-		cache.set('cmd_history',cmd_history,8640000000)
-		info['msgtype']="OK"
+		total=REDIS.get("total.%s" % tid)
+		current=REDIS.get("current.%s" % tid)
+		try:
+			if total is None or current is None: progress=0 
+			else:progress= "%0.2f"  % (float(current) / float(total) * 100)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000012")
+		cheungssh_info["progress"]=progress
+		log_name="log.%s.%s" % (tid,sid)
+		LLEN=REDIS.llen(log_name) 
+		if not LLEN==0:
+			for i in range(LLEN):
+				_content=REDIS.lpop(log_name)
+				_content=json.loads(_content) 
+				content+=_content["content"]
+				cheungssh_info["content"]={"content":content,"stage":_content["stage"],"status":_content["status"]}
+		cheungssh_info["status"]=True
 	except Exception,e:
-		print "发生错误",e
-		info['msgtype']='ERR'
-		info['content']=str(e)
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-@login_check.login_check('',False)
-@permission_check('cheungssh.show_cmd_history')
-def cmdhistory(request):
-	callback=request.GET.get('callback')
-	cmd_history=cache.get('cmd_history')
-	if not  cmd_history:
-		info={"msgtype":"OK","content":[],"totalnum":0}
-	else:
-		info=pagelist(request,cmd_history)
-	T=[]
-	for t in info['content']: 
-		cmd_result_id="cmd.%s.%s" % (t['tid'],t['servers'])
-		cmd_result=redis_to_redis.get_redis_data(cmd_result_id,'list')['content']
-		
-		t["result"]=re.sub("""\\"|\\'""",'',"</br>".join(cmd_result))
-		T.append(t)  
-	info['content']=T
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-
-
-@login_check.login_check()
-def get_hwinfo(request):
-	info={'msgtype':'ERR','content':[]}
-	callback=request.GET.get('callback')
-	info['content']=hwinfo.hwinfo(cache)
-	info['msgtype']='OK'
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('',False)
-@permission_check('cheungssh.show_access_page')
-def operation_record(request):	
-	username=request.user.username
-	info={'msgtype':'OK','content':[]}
-	pagenum=request.GET.get('pagenum')
-	pagesize=request.GET.get('pagesize')
-	callback=request.GET.get('callback')
-	get_login_record=cache.get('login_record')
-	if get_login_record:	
-		pagenum=int(pagenum)  
-		pagesize=int(pagesize)  
-		endpage=pagesize*pagenum+1
-		if pagenum==1:
-			startpage=pagesize*(pagenum-1) 
-			endpage=pagesize*pagenum
-		else:
-			endpage=pagesize*pagenum+1   
-			startpage=pagesize*(pagenum-1)+1  
-		#query_get_login_tmp=get_login_record[startpage:endpage]  
-		query_get_login_all=[]
-		for t in get_login_record:  
-			if username==t["username"] or request.user.is_superuser:
-				query_get_login_all.append(t)
-		
-		info['content']=query_get_login_all[startpage:endpage]
-		totalnum=len(query_get_login_all)
-	else:
-		totalnum=0
-	info['totalnum']=totalnum
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('脚本执行')
-@permission_check('cheungssh.excutescript')
-def excutes_script(request):
-	info={'msgtype':'ERR','content':[]}
-	callback=request.GET.get('callback')
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
 	
-	return HttpResponse(info)
-
-@login_check.login_check('脚本执行')
-@permission_check('cheungssh.scriptfile_add')
-def add_script(request):
-	username=request.user.username
-	info={"msgtype":"ERR"}
-	scriptfilecontent=request.POST.get('filecontent')
-	filename=request.POST.get('filename')
-	callback=request.POST.get('callback')
+@login_check.login_check('执行命令')
+@permission_check('cheungssh.execute_command')
+@black_command_check
+@ajax_http
+def execute_command(request):
+	cheungssh_info={"status":False,'content':""}
 	try:
-		scriptfilepath=os.path.join(scriptfiledir,filename)
-		with open(scriptfilepath,'wb')  as f:
-			f.write(scriptfilecontent)
-		logline={}
-		logline['time']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-		logline['filename']=filename
-		logline['username']=username
-		scriptlogline=cache.get('scriptlogline')  
-		if scriptlogline is None:scriptlogline={}
-		scriptlogline[filename]=logline
-		cache.set('scriptlogline',scriptlogline,36000000000000)
-		info['msgtype']='OK'
-		info['content']=logline
-		print '完毕'
+		
+		id=str(random.randint(90000000000000000000,99999999999999999999))
+		
+		parameter=request.POST.get("parameters") or request.GET.get("parameters") 
+		if not parameter:
+			raise CheungSSHError("错误码:CHB0000000000")
+		try:
+			parameter=json.loads(parameter)
+		except:
+			raise CheungSSHError("错误码:CHB0000000001")
+		try:
+			servers=parameter["servers"]
+			cmd=parameter["cmd"]
+		except:
+			raise CheungSSHError("错误码:CHB0000000002")
+		
+		
+		
+		parameter["tid"]=id 
+		CheungSSHThread=CheungSSHThreadAdmin()
+
+		CheungSSHThread.run(parameter)
+
+
+		client_info=resolv_client(request)
+		client_info["cmd"]=cmd
+		#client_info["parameter"]=parameter
+		client_info=dict(client_info,**parameter)
+		
+		init_status={"content":"","status":False,"stage":"running"}#stage为running或者done,
+		client_info=dict(client_info,**init_status)
+		
+		servers=client_info["servers"]
+		_alias=[]
+		for sid in servers:
+			try:
+				host_alias=cheungssh_modul_controler.CheungSSHControler.convert_id_to_ip(sid)["content"]["alias"]		
+				_alias.append(host_alias)
+			except Exception,e:
+				
+				pass
+		client_info["alias"]=_alias
+		
+		client_info=json.dumps(client_info,encoding="utf8",ensure_ascii=False)
+		
+		REDIS.rpush('command.history',client_info)
+		cheungssh_info["content"]=id
+		cheungssh_info["status"]=True
 	except Exception,e:
-		info['content']=str(e)
-		print 'cuowu',str(e)
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('脚本执行')
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+	
+
+@login_check.login_check('命令操作日志')
+@permission_check('cheungssh.command_history')
+@ajax_http
+def command_history(request):
+	#t["result"]=re.sub("""\\"|\\'""",'',"</br>".join(cmd_result))
+	cheungssh_info={"content":[],"status":True}
+	history=REDIS.lrange("command.history",0,-1)
+	for line in history:
+		line=json.loads(line)
+		cheungssh_info["content"].append(line)
+	return cheungssh_info
+
+@login_check.login_check('',False)
+@ajax_http
+def my_command_history(request):
+	cheungssh_info={"content":[],"status":True}
+	username=request.user.username
+	history=REDIS.lrange("command.history",-5,-1)
+	for line in history:
+		line=json.loads(line)
+		owner=line["owner"]
+		cmd=line["cmd"]
+		if username==owner:cheungssh_info["content"].append(cmd)
+	return cheungssh_info
+
+
+
+@login_check.login_check('查看脚本内容')
 @permission_check('cheungssh.scriptfile_show')
+@ajax_http
 def show_scriptcontent(request):
 	fid=str(random.randint(90000000000000000000,99999999999999999999))  
-	info={'msgtype':'ERR','content':[]}
-	callback=request.GET.get('callback')
+	info={'status':'False','content':[]}
 	edit_type=request.GET.get('edit_type')
 	username=request.user.username
 	uploadtime=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time())) 
 	filename=request.GET.get('filename')
 	try:
 		scriptfilepath=os.path.join(scriptfiledir,filename)
-		with open(scriptfilepath) as f:
+		with open(scriptfilepath.encode('utf8')) as f:
 			scriptfilecontent=f.read().strip()
-		info['msgtype']='OK'
+		info['status']='True'
 		info['content']=scriptfilecontent
 	except Exception,e:
 		info['content']=str(e)
 		print  '脚本错误',e,show_scriptlist.__name__
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-@login_check.login_check('脚本执行')
+	return info
+@login_check.login_check('查看脚本清单')
 @permission_check('cheungssh.scriptfile_list')
+@ajax_http
 def show_scriptlist(request):
-	info={"msgtype":"ERR"}
+	info={"status":False}
 	scriptlogline=cache.get('scriptlogline')
-	callback=request.GET.get('callback')
 	if scriptlogline:
 		info['content']=scriptlogline.values()
 	else:
 		info['content']=[]
-	info['msgtype']='OK'
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+	info['status']='True'
+	return info
+@login_check.login_check('删除脚本')
+@permission_check('cheungssh.scriptfile_del')
+@ajax_http
 def del_script(request):
 	
-	info={"msgtype":"ERR"}
-	callback=request.GET.get('callback')
+	info={"status":False}
 	try:
 		filenames=request.GET.get('filename') 
 		scriptlogline=cache.get('scriptlogline')  
@@ -837,266 +728,128 @@ def del_script(request):
 					info['content']=str(e)
 					break
 			cache.set('scriptlogline',scriptlogline,8640000000)
-			info['msgtype']='OK'
+			info['status']='True'
 	except Exception,e:
 		info['content']=str(e)
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
+	return info
 
 
 def onelinenotice(request):
-	info={'msgtype':'ERR','content':[]}
-	callback=request.GET.get('callback')
+	info={'status':'False','content':[]}
 	login_check_info=login_check.login_check()(request)
 	if not login_check_info[0]:return HttpResponse(login_check_info[1])
 
-'''from auth_check import auth_check
-class  test(View,auth_check):
-	def get(self,request):
-		a=auth_check.__init__(self)
-		print a
-		return HttpResponse('这是get请求')'''
 def t1(request):
-	print type(request.user)
-	return HttpResponse(request.user)
+	a="%s---%s" %(os.getpid(),os.getppid())
+	return HttpResponse(a)
 @login_check.login_check('',False)
-def sshcheck(request):
-	info={"msgtype":"OK","content":"","status":"ERR"}
-	callback=request.GET.get('callback')
-	id=request.GET.get('id')
-	try:
-		conf=db_to_redis_allconf.allhostconf()['content'][id]
-		sshcheck=ssh_check.ssh_check(conf)
-		if sshcheck['msgtype']=="OK":
-			info['status']="OK"
-		else:
-			info['status']="ERR"
-			info['content']=sshcheck['content']
-	except KeyError:
-		info['msgtype']='ERR'
-		info['content']="服务器不存在"
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
+@ajax_http
+def ssh_status(request):
+	
+	sid=request.GET.get('sid')
+	status=REDIS.get("server.status.%s"%sid)
+	if status is None:
+		status={"status":"checking","content":"检查中"}
 	else:
-		info="%s(%s)"  % (callback,info)
-	return HttpResponse(info)
-def cheungssh_index_redirect(request):
-	return HttpResponseRedirect('/cheungssh/')
-def test_download(request):
-	file_name='go'
-	response = HttpResponse()
-	response['Content_Type']='application/octet-stream'
-	response = HttpResponse(mimetype='application/force-download')
-	response['Content-Disposition'] = 'attachment; filename=hao'
-	response['X-Sendfile'] ='/tmp/passwd'
-	return response
-"""from sendfile import sendfile
-class test_download(View):
-    def get(self, request):
-        return sendfile(request, '/tmp/passwd')"""
-def check_permission(request):
-	if request.user.has_perm('cheungssh.excutescript'):
-		return HttpResponse('存在')
+		status=json.loads(status)
+	return status
+@ajax_http
+def ssh_check(request):
+	
+	sid=request.GET.get('sid')
+	
+	ssh=CheungSSHCheck(sid=sid)
+	ssh.run()
+	
+	status=REDIS.get("server.status.%s"%sid)
+	if status is None:
+		status={
+			"status":"checking",
+			"content":"检查中",
+			"time":time.strftime("%Y-%m-%d %H:%M:%S",time.localtime()),
+		}
 	else:
-		return HttpResponse('不存在')
-@login_check.login_check('批量创建服务器')   
-@permission_check('cheungssh.batchconfig_web')
-def batchconfig_web(request):
-	info={"msgtype":"ERR"}
-	callback=request.POST.get('callback')
-	username=request.user.username
-	configcontent=request.POST.get('configcontent')
-	allconf=cache.get('allconf')
-	confline=''
-	batchallconf={}
-	try:
-		
-		keyfilelog=cache.get('keyfilelog')
-		i=0
-		for p in configcontent.split('\n'):
-			i+=1
-			id=str(random.randint(90000000000000000000,99999999999999999999))
-			p=re.sub('^ *','',p)  
-			if re.search('^#',p) or re.search('^$',p) :continue
-			confline=p.split()  
-			
-			try:int(confline[1])
-			except:raise IOError("在第[%d]行,端口应该是一个数字:[%s]" %(i,confline[1]))
-			if not confline[4]=='KEY' and not confline[4]=='PASSWORD':raise IOError('在第[%d]行,登录方式[%s]应该是KEY 或者 PASSWORD' % (i,confline[4]))
-			keyfile=confline[5]
-			if not keyfilelog is None:  
-				for k in keyfilelog.keys():
-					if keyfilelog[k]['filename']==keyfile:
-						keyfile=k
-						break
-			tconf={
-				"id":id,
-				"ip":confline[0],
-				"port":int(confline[1]),
-				"group":confline[2],
-				"username":confline[3],
-				"loginmethod":confline[4],
-				"keyfile":keyfile,  
-				"password":confline[6],
-				"sudo":confline[7],
-				"sudopassword":confline[8],
-				"su":confline[9],
-				"supassword":confline[10],
-				"owner":username,
-				"descript":confline[11]
-				} 
-			
-			batchallconf[id]=tconf 
-			
-		
-		if allconf is None:allconf={"content":{},"msgtype":"OK"}
-		CONF=allconf['content'].copy()
-		CONF.update(batchallconf) 
-		allconf['content']=CONF
-		cache.set('allconf',allconf,8640000000)
-		info['msgtype']='OK'
-	except IndexError:
-		confline=json.dumps(confline,encoding='utf-8',ensure_ascii=False)
-		info['content']='没有足够的参数: %s' % confline
-	except Exception,e:
-		info['content']=str(e)
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-        return response
+		status=json.loads(status)
+	status["alias"]=cheungssh_modul_controler.CheungSSHControler.convert_id_to_ip(sid)["content"]["alias"]
+	return status
 def redirect_admin(reqeust):
 	return HttpResponseRedirect('/cheungssh/admin/')
 @login_check.login_check('添加命令黑名单')
-@permission_check('cheungssh.addblackcmd')
-def add_black_cmd(request):
-	info={"msgtype":"ERR"}
-	cmd=request.GET.get('cmd')
-	callback=request.GET.get('callback')
-	black_cmd_list=cache.get('black.cmd.list')
-	
-	create_user=request.user.username
-	create_time=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
-	client_ip=request.META['REMOTE_ADDR']
-	IP_locate=IP.find(client_ip)
+@permission_check('cheungssh.command_black_create')
+@ajax_http
+def add_black_command(request):
+	cheungssh_info={"status":True,"content":""}
 	id=str(random.randint(90000000000000000000,99999999999999999999))  
-	CMD={
-		"id":id,
-		"owner":create_user,
-		"createtime":create_time,
-		"ip":client_ip,
-		"IPlocate":IP_locate,
-		"cmd":cmd
-		}
-	if black_cmd_list is None:black_cmd_list=[]   
-	black_cmd_list.insert(0,CMD)
-	cache.set('black.cmd.list',black_cmd_list,8640000000)
-	info["msgtype"]="OK"
-	info["cid"]=id
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-@login_check.login_check('查看命令黑名单')
-@permission_check('cheungssh.listblackcmd')
-def list_black_cmd(request):
-	return page_list(request,'black.cmd.list')
+	cmd=request.GET.get('cmd')
+	
+	client_info=resolv_client(request)
+	client_info["id"]=id
+	client_info["cmd"]=cmd
+	client_info=json.dumps(client_info,encoding="utf8",ensure_ascii=False) 
+	REDIS.rpush('black.command.list',client_info)
+	cheungssh_info["content"]=id 
+	return cheungssh_info
+@login_check.login_check('查看命令黑名单清单')
+@permission_check('cheungssh.command_black_list')
+@ajax_http
+def list_black_command(request):
+	cheungssh_info={"status":True,"content":""}
+	list_black=REDIS.lrange("black.command.list",0,-1)
+	cheungssh_info["content"]=list_black
+	return cheungssh_info
 @login_check.login_check('删除命令黑名单')
-@permission_check('cheungssh.delblackcmd')
-def del_black_cmd(request):
-	info={"msgtype":"ERR"}
-	allid=request.GET.get('id')
-	callback=request.GET.get('callback')
-	black_cmd_list=cache.get('black.cmd.list')
+@permission_check('cheungssh.command_black_delete')
+@ajax_http
+def del_black_command(request):
+	cheungssh_info={"content":"资源不存在！","status":False}
+	id=request.GET.get("id")
 	try:
-		allid=eval(allid)
-		if not type(allid)==type([]):raise IOError("参数错误，应该是一个[]")
-		for t in black_cmd_list:
-			print t,1111111111
-			for delid in allid:
-				print delid,555555
-				if int(t['id'])==int(delid) and t["owner"] ==request.user.username or request.user.is_superuser:
-					black_cmd_list.remove(t)
-					break
-		cache.set('black.cmd.list',black_cmd_list,8640000000)
-		info["msgtype"]="OK"
+		data=REDIS.lrange("black.command.list",0,-1)
+		for _line in data:
+			line=json.loads(_line)
+			print str(line["id"]),str(id)
+			if str(line["id"])==str(id):
+				REDIS.lrem("black.command.list",_line)
+				cheungssh_info["status"]=True
+				break
 	except Exception,e:
 		print '发生了错误',e
 		info["content"]=str(e)
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
+	return cheungssh_info
 
 @login_check.login_check('查看系统所有用户',False)
+@ajax_http
 def getalluser(request):
-	info={"msgtype":"ERR"}
-	callback=request.GET.get('callback')
+	info={"status":False}
 	sysuser=[]    
-	userdata=User.objects.all()
-	for a in userdata:
+	users=User.objects.all()
+	groups=Group.objects.all()
+	for a in users:
 		sysuser.append(a.username)
-	info["msgtype"]="OK"
+	for group in groups:
+		sysuser.append(group.name)
+	info["status"]=True
 	info["content"]=sysuser
-	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
+	return info
 @login_check.login_check('重置登陆失败阈值')
-@permission_check('cheungssh.set_threshold')
+@permission_check('cheungssh.login_limit_set')
+@ajax_http
 def set_threshold(request):
-	info={"msgtype":"ERR"}
+	info={"status":False}
 	threshold=request.GET.get('threshold')
 	callback=request.GET.get('callback')
 	try:
 		threshold=int(threshold)
 		cache.set('ip.threshold',threshold,8640000000)
-		info['msgtype']="OK"
+		info['status']=True
 	except Exception,e:
-		info["参数应该是一个数字"]
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-
+		info["content"]="参数应该是一个数字"
+	return info
 @login_check.login_check('查看登录失败记录')
-@permission_check('cheungssh.show_ip_limit')
+@permission_check('cheungssh.login_fail_list')
+@ajax_http
 def show_ip_limit(request):
-	info={"msgtype":"ERR","content":[]}
+	info={"status":False,"content":[]}
 	callback=request.GET.get('callback')
 	R=cache.master_client
 	ip_limit_list=[]
@@ -1112,100 +865,852 @@ def show_ip_limit(request):
 			if ip_time> ip_threshold:
 				ip_status="已锁定"
 			else:
-				ip_status="未超过阈值"
+				ip_status="正常"
 			ip_limit={"ip":ip,"ip-locate":IP.find(ip),"time":ip_time,"status":ip_status}
 			ip_limit_list.append(ip_limit)
 	
 	info["content"]=ip_limit_list
-	info["msgtype"]="OK"
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
+	info["status"]=True
+	return info
 @login_check.login_check('删除锁定IP')
-@permission_check('cheungssh.del_ip_limit')
+@permission_check('cheungssh.unlock_ip')
+@ajax_http
 def del_ip_limit(request):
-	callback=request.GET.get('callback')
 	ip=request.GET.get('ip')
-	info={"msgtype":"ERR"}
+	info={"status":False}
 	ip="fail.limit.%s" %(ip)
 	cache.delete(ip)
-	info["msgtype"]="OK"
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-@login_check.login_check('查看登陆失败次数阈值')
+	info["status"]=True
+	return info
+@login_check.login_check('设置登录安全阈值')
 @permission_check('cheungssh.show_threshold')
+@ajax_http
+def modify_ip_limit(request):
+	info={"status":False}
+	limit=request.GET.get("limit")
+	limit=int(limit)
+	REDIS.set('ip.threshold',limit)  
+	info["status"]=True
+	return info
+@login_check.login_check('查看登录安全阈值')
+@permission_check('cheungssh.show_threshold')
+@ajax_http
 def show_ip_threshold(request):
-	callback=request.GET.get('callback')
-	info={"msgtype":"ERR"}
-	ip_threshold_r=cache.get('ip.threshold')  
-	ip_threshold=lambda x:x if x is not None else 4 
-	ip_threshold=ip_threshold(ip_threshold_r)
+	info={"status":False}
+	ip_threshold=REDIS.get('ip.threshold')  
+	if ip_threshold is None:
+		ip_threshold=4
+	else:
+		ip_threshold=int(ip_threshold)
 	info["content"]=ip_threshold
-	info["msgtype"]="OK"
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
-	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
-@login_check.login_check('查看远程文件内容')
+	info["status"]=True
+	return info
+@login_check.login_check('查看远程服务器文件内容')
 @permission_check('cheungssh.get_remote_filecontent')
+@get_file_check.check
+@ajax_http 
 def get_file_content(request):
-	info={"msgtype":"ERR"}
-	filename=request.GET.get('filename') 
-	callback=request.GET.get('callback')
-	filepath=os.path.join(downloaddir,filename)
-	try:
-		with open(filepath) as f:
-			info["content"]="".join(f.readlines())
-		info['msgtype']='OK'
-	except Exception,e:
-		info["content"]=str(e)
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	if callback is None:
-		info=info
+	
+	fid=str(random.randint(90000000000000000000,99999999999999999999))
+	info={"status":False}
+	host=request.GET.get('host')
+	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
+	redis_info={"status":True,"content":"","progres":"0",'status':"running","lasttime":lasttime}
+	cache.set("info:%s" % (fid),redis_info,360)
+	username=request.user.username
+	filename=request.GET.get('filename')
+	filename=os.path.basename(filename)
+	T=FileTransfer.getconf(host,fid,username,"download") 
+	RT=cache.get("info:%s"%(fid))
+	if RT['status']=='False':
+		info['content']="文件下载失败,%s"%RT['content']
 	else:
-		info="%s(%s)"  % (callback,info)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
+		if type(T)==type(None):T=(True,)
+		if T[0]:
+			try:
+				filepath=os.path.join(downloaddir,filename)
+				with open(filepath.encode('utf8')) as f:
+					info["content"]="".join(f.readlines())
+				info['status']='True'
+			except Exception,e:
+				if e.errno==2:info["content"]="文件不存在"
+				else:
+					info["content"]=str(e)
+		else:
+			info['content']=T[1]    
+	return info 
 @login_check.login_check('更新远程文件内容')
 @permission_check('cheungssh.up_remote_filecontent')
+@ajax_http 
 def up_file_content(request):
-	info={"msgtype":"ERR"}
+	info={"status":False}
 	content=request.POST.get('content')
 	filename=request.POST.get('filename')  
+	filename=os.path.basename(filename)
 	filepath=os.path.join(upload_dir,filename)
 	try:
-		with open(filepath,'w')as f: 
+		with open(filepath.encode('utf8'),'w')as f: 
 			f.write(content)
-		info["msgtype"]="OK"
+		info["status"]=True
 	except Exception,e:
 		info["content"]=str(e)
-	info=json.dumps(info,encoding="utf-8",ensure_ascii=False)
-	response=HttpResponse(info)
-	response["Access-Control-Allow-Origin"] = "*"
-	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
-	return response
+	return info
+@login_check.login_check('查看可管理文件清单',False)
+@permission_check('cheungssh.catadminfilelist')
+@ajax_http 
+def catfilelist(request):
+	info=redis_to_redis.get_redis_data('adminfilelist','list')
+	return info
+@login_check.login_check('设置可管理文件清单',False)
+@permission_check('cheungssh.setadminfilelist')
+@ajax_http 
+def setfilelist(request):
+	filename=request.GET.get('filename').strip(' ')
+	info=redis_to_redis.set_redis_data('adminfilelist',filename)
+	return info
+
+
+
+@login_check.login_check('查看命令执行状态',False)
+@ajax_http 
+def cmdstatus(request):
+	info={"status":True}
+	rid=request.GET.get('rid') 
+	FailID=cache.get(rid)
+	if FailID is None:
+		info["content"]=[]
+	else:
+		cache.delete(rid)
+		info['content']=FailID
+	info["num"]=len(info['content'])
+	return info
+@ajax_http
+def http404(request):
+	info={"status":False,"content":"网页不存在"}
+	return info
+@ajax_http
+def http500(request):
+	info={"status":False,"content":"抱歉，服务器无法识别您的请求，请联系管理员!"}
+	return info
+@ajax_http
+def test(request):
+	info={"status":True,"content":"测试用"}
+	return info
+	return 
+
+@login_check.login_check('查看命令执行状态',False)
+@ajax_http 
+def whoami(request):
+	info={"status":True,"content":""}
+	username=request.user.username
+	info["content"]=username
+	return info
+	
+def login_html(request):
+	return  render_to_response('login.html')
+	
+@login_check.login_check('查看命令执行状态',False)
+@ajax_http 
+def all_parameters(request):
+	info={"status":True,"content":""}
+	_parameters=parameters()
+	request_parameter=request.GET.get("parameter")
+	if request_parameter=="serverOptions":
+		info["content"]=_parameters.get_server_options()
+	
+	return info
+#@login_check.login_check('服务器状态',False)
+@ajax_http 
+def get_dashboard(request):
+	info={"status":True,"content":""}
+	a=process()
+	info["content"]=a.get_info()
+	return info
+#权限清理
+#@login_check.login_check('创建/修改App')
+#@permission_check('cheungssh.create_app')
+@ajax_http 
+def create_app(request):
+	cheungssh_info={"status":False,"content":""}
+	app_id=str(random.randint(90000000000000000000,99999999999999999999))
+	parameters=request.POST.get("parameters")
+	username=request.user.username
+	username="cheungssh"
+	try:
+		try:
+			parameters=json.loads(parameters)
+		except:
+			raise CheungSSHError("CHB0000000026")
+		if parameters.has_key("id") and parameters["id"]:
+			app_id=parameters["id"]
+		if not parameters["owner"]==username and not request.user.is_superuser:
+			raise CheungSSHError("您无权转移权限!")
+		data={
+			"id":app_id,
+			"owner":username,
+			"app_name":parameters["app_name"],
+			"app_command":parameters["app_command"],
+			"app_check_command":parameters["app_check_command"],
+			"sid":parameters["sid"],
+			"alias":parameters["alias"],
+			"content":"",
+			"status":"新建",
+			"time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),
+		}
+		_data=json.dumps(data,encoding="utf-8",ensure_ascii=False)
+		REDIS.hset("CHB-R000000000210",app_id,_data)
+		cheungssh_info["content"]=data
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["content"]=str(e)
+		cheungssh_info["status"]=False
+	return cheungssh_info
+
+@login_check.login_check('查看应用管理')
+@permission_check('cheungssh.view_app')
+@ajax_http 
+def get_app_list(request):
+	username=request.user.username
+	is_super=request.user.is_superuser
+	return CheungSSHAppAdmin.get_app_list(username,is_super)
+@login_check.login_check('执行App应用')
+@permission_check('cheungssh.execute_app')
+@ajax_http 
+def execute_app(request):
+	appid=request.GET.get("appid")
+	username=request.user.username
+	is_super=request.user.is_superuser
+	return  CheungSSHAppAdmin.execute_app(appid,username,is_super)
+
+@login_check.login_check('删除App应用')
+@permission_check('cheungssh.delete_app')
+@ajax_http 
+def delete_app(request):
+	appid=request.GET.get("appid")
+	username=request.user.username
+	is_super=request.user.is_superuser
+	return  CheungSSHAppAdmin.delete_app(appid,username,is_super)
+
+
+
+
+
+
+
+
+			
+@login_check.login_check('自定义资产项查看')
+@permission_check('cheungssh.custom_assets_list')	
+@ajax_http
+def custom_assets_class(request):
+	info={"status":True,"content":""}
+	a=custom_assets()
+	info["content"]=a.get_assets_class()
+	return info
+@login_check.login_check('自定义资产创建/修改')
+@permission_check('cheungssh.custom_assets_create')
+@ajax_http
+def increate_asset(request):
+	info={"status":False,"content":""}
+	id=str(random.randint(90000000000000000000,99999999999999999999))
+	asset=request.GET.get("asset")
+	try:
+		if not asset:raise CheungSSHError("CHB0000000003")
+		try:
+			asset=json.loads(asset)
+			a=custom_assets()
+			if not asset.has_key("id"):
+				_asset={id:asset}		
+				info["content"]=id 
+			else:
+				
+				_asset={asset["id"]:asset}
+				
+				dynamic_assets=REDIS.get("assets.conf")
+				dynamic_assets=json.loads(dynamic_assets)
+				try:
+					del dynamic_assets[asset["id"]]
+					dynamic_assets=json.dumps(dynamic_assets,encoding="utf8",ensure_ascii=False)
+					
+					REDIS.set("assets.conf",dynamic_assets)
+				except Exception,e:
+					raise CheungSSHError(e)
+			a.increate_asset_class(_asset)
+			info["status"]=True
+		except:
+			raise CheungSSHError("CHB0000000004")
+	except Exception,e:
+		info["content"]=str(e)
+		info["status"]=False
+	return info
+@login_check.login_check('查看资产信息')
+@permission_check('cheungssh.assets_list')
+@ajax_http
+def load_assets_list(request):
+	info={"status":True,"content":""}
+	a=custom_assets()
+	info["content"]=a.get_assets_class()
+	return info
+@login_check.login_check('自定义资产删除')
+@permission_check('cheungssh.custom_assets_delete')
+@ajax_http
+def delete_asset_list(request):
+	info={"status":True,"content":""}
+	assets_list=request.GET.get("assets")
+	try:
+		try:
+			assets_list=json.loads(assets_list)
+		except:
+			raise CheungSSHError("CHB0000000005")
+		if not type([]) == type(assets_list):raise CheungSSHError("CHB0000000006")
+		a=custom_assets()
+		a.delete_assets_class(assets_list)
+		info["status"]=True
+	except Exception,e:
+		info["content"]=str(e)
+		info["status"]=False
+	return info
+@ajax_http
+def get_progress(request):
+	#print  globals.user,type(globals),111111111111111111
+	#print type(globals.request),111111111
+	cheungssh_info={"content":""}
+	return cheungssh_info
+
+
+
+
+
+@login_check.login_check('Docker镜像清单查看')
+@permission_check('cheungssh.docker_image_list')
+@ajax_http
+def docker_images_list(request):
+	cheungssh_info=cheungssh_docker_admin.DockerAdmin.read_docker_images_list()
+	return cheungssh_info
+@login_check.login_check('Docker容器清单查看')
+@permission_check('cheungssh.docker_containner_list')
+@ajax_http
+def docker_containers_list(request):
+	cheungssh_info=cheungssh_docker_admin.DockerAdmin.read_docker_containers_list()
+	return cheungssh_info
+@ajax_http
+def docker_image_count(request):
+	cheungssh_info=cheungssh_docker_admin.DockerAdmin.read_docker_image_count()
+	return cheungssh_info
+@ajax_http
+def docker_container_count(request):
+	cheungssh_info=cheungssh_docker_admin.DockerAdmin.read_docker_container_count()
+	return cheungssh_info
+@ajax_http
+def docker_container_start(request):
+	cheungssh_info={"status":False,"content":""}
+	id=str(random.randint(90000000000000000000,99999999999999999999))
+	cheungssh_info["content"]=id
+	parameters=request.GET.get("parameters")
+	try:
+		try:
+			parameters=json.loads(parameters)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000005")
+		if parameters["task_type"]=="start":
+			if not request.user.has_perm('cheungssh.docker_containner_start'):
+				raise CheungSSHError("您无权访问该资源! 该操作已被审计，请联系管理员!")
+		elif parameters["task_type"]=="stop":
+			if not request.user.has_perm('cheungssh.docker_containner_stop'):
+				raise CheungSSHError("您无权访问该资源! 该操作已被审计，请联系管理员!")
+		elif parameters["task_type"]=="delete":
+			if not request.user.has_perm('cheungssh.docker_containner_delete'):
+				raise CheungSSHError("您无权访问该资源! 该操作已被审计，请联系管理员!")
+		parameters["tid"]=id
+		D=DockerControler(parameters)
+		D.run()
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@ajax_http
+def get_docker_container_progress(request):
+	tid=request.GET.get("tid")
+	cheungssh_info={"status":False,"content":""}
+	try:
+		cheungssh_info=DockerControler.get_docker_container_progress(tid=tid)
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('查看资产信息')
+@permission_check('cheungssh.assets_list')
+@ajax_http
+def get_current_assets_data(request):
+	cheungssh_info={"status":False,"content":""}
+	try:
+		data=REDIS.get("current.assets")
+		data=json.loads(data)
+		cheungssh_info["content"]=data
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('查看资产信息')
+@permission_check('cheungssh.assets_list')
+@ajax_http
+def get_history_assets_data(request):
+	cheungssh_info={"status":False,"content":""}
+	try:
+		cheungssh_info["status"]=True
+		data=REDIS.lrange('history.assets',0,-1)
+		#data=json.loads(data)
+		cheungssh_info["content"]=data
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@ajax_http
+def get_assets_conf(request):
+	cheungssh_info={"status":False,"content":""}
+	try:
+		data=REDIS.get("assets.conf")
+		cheungssh_info["content"]=json.loads(data)
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('远程文件上传')
+@permission_check('cheungssh.remote_file_upload')
+@ajax_http
+def filetrans_upload(request):
+	tid=str(random.randint(90000000000000000000,99999999999999999999))
+	username=request.user.username
+	cheungssh_info={"status":False,"content":""}
+	data={"tid":tid,"progress":0,"content":"","status":True}
+	try:
+		parameters=request.GET.get('parameters')
+		try:
+			parameters=json.loads(parameters)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000008")
+		
+		REDIS.set("progress.%s"%tid,json.dumps(data,encoding="utf8",ensure_ascii=False))
+		
+		if not parameters.has_key("sfile") or not parameters.has_key("dfile"):raise CheungSSH("CHB0000000014")
+		sfile=os.path.join(cheungssh_settings.upload_dir,username,os.path.basename(parameters["sfile"]))  
+		dfile=parameters["dfile"]
+		if not type(parameters)==type({}):raise CheungSSHError("CHB0000000007-1")
+		host=cheungssh_modul_controler.CheungSSHControler.convert_id_to_ip(parameters["sid"])
+		if not host["status"]:raise CheungSSHError(host['content'])
+		host=host['content']
+		sftp=CheungSSHFileTransfer()
+		login=sftp.login(**host)
+		if not login["status"]:raise CheungSSHError(login["content"])
+		t=threading.Thread(target=sftp.upload,args=(sfile,dfile,tid))
+		t.start()
+		
+		cheungssh_info["status"]=True
+		cheungssh_info["content"]=tid
+	except Exception,e:
+		
+		REDIS.set("progress.%s"%tid,json.dumps(data,encoding="utf8",ensure_ascii=False))
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@ajax_http
+def get_filetrans_progress(request):
+	tid=request.GET.get("tid")
+	cheungssh_info=CheungSSHFileTransfer.get_progress(tid)
+	return cheungssh_info
+	
+@login_check.login_check('远程文件下载')
+@permission_check('cheungssh.remote_file_download')
+@ajax_http
+def remote_download(request):
+	tid=str(random.randint(90000000000000000000,99999999999999999999))
+	cheungssh_info={"status":False,"content":""}
+	try:	
+		parameters=request.GET.get('parameters')
+		try:
+			parameters=json.loads(parameters)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000008")
+		if not type(parameters)==type({}):raise CheungSSHError("CHB0000000007-1")
+		
+		data={"tid":tid,"progress":0,"content":"","status":True}
+		REDIS.set("progress.%s"%tid,json.dumps(data,encoding="utf8",ensure_ascii=False))
+		
+		if not parameters.has_key("sfile"):raise CheungSSH("CHB0000000019")
+		sfile=parameters["sfile"]
+		host=cheungssh_modul_controler.CheungSSHControler.convert_id_to_ip(parameters["sid"])
+		if not host["status"]:raise CheungSSHError(host['content'])
+		host=host['content']
+		alias=host["alias"]
+		dfile_name="{alias}.{tid}.{filename}".format(alias=alias,tid=tid,filename=os.path.basename(parameters["sfile"]))  
+		dfile_full_path=os.path.join(cheungssh_settings.download_dir,dfile_name)  
+		sftp=CheungSSHFileTransfer()
+		login=sftp.login(**host)
+		if not login["status"]:raise CheungSSHError(login["content"])
+		t=threading.Thread(target=sftp.download,args=(sfile,dfile_full_path,tid))
+		t.start()
+		
+		cheungssh_info["status"]=True
+		cheungssh_info["tid"]=tid
+		cheungssh_info["filename"]=dfile_name
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@ajax_http
+def create_tgz_pack(request):
+	
+	tid=str(random.randint(90000000000000000000,99999999999999999999))
+	cheungssh_info={"status":False,"content":""}
+	try:
+		files=request.GET.get("files")
+		try:
+			files=json.loads(files)
+		except Exception,e:
+			raise CheungSSHError("CHB0000000020")
+		if not type(files)==type([]):raise CheungSSHError("CHB0000000020")
+		
+		os.chdir(cheungssh_settings.download_dir)
+		filename="%s.tgz" %tid
+		cmd="tar zcvf {filename} {files}".format(filename=filename,files=" ".join(files))
+		data=commands.getstatusoutput(cmd)
+		if data[0]:
+			raise CheungSSHError("打包失败",data[1])
+		else:
+			
+			server_head=request.META['HTTP_HOST']
+			url=os.path.join(cheungssh_settings.download_file_url,filename)
+			full_url="http://{server_head}{url}".format(server_head=server_head,url=url)
+			cheungssh_info["content"]=full_url
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('脚本内容查看')
+@permission_check('cheungssh.show_script_content')
+@ajax_http
+def get_script_content(request):
+	filename=request.GET.get("filename")
+	username=request.user.username
+	full_path=os.path.join(cheungssh_settings.script_dir,username,filename)
+	return FileAdmin.get_content(full_path)
+@login_check.login_check('修改/创建脚本')
+@permission_check('cheungssh.create_script')
+@ajax_http
+def write_script_content(request):
+	cheungssh_info={"status":False,"content":""}
+	_filename=request.POST.get('filename')
+	filename=os.path.basename(_filename)
+	filecontent=request.POST.get("content")
+	username=request.user.username
+	try:
+		if len(REDIS.hgetall("scripts"))>=9:raise CheungSSHError("CHB-BUSINESS-LIMIT")
+		full_path=os.path.join(cheungssh_settings.script_dir,username,filename)
+		if not filecontent.endswith("\n"):
+			filecontent="%s\n" %filecontent
+		with open(full_path.encode('utf8'),"wb") as f:
+			f.write(filecontent)
+		filename=str(request.FILES.get("file"))
+		_data=REDIS.hget("scripts",filename)
+		if _data is None:
+			pass
+		else:
+			data=json.loads(_data)
+			if filename==data["script"]:
+				if username==data["owner"]:
+					pass
+				else:
+					raise CheungSSHError("您的操作不被允许!其他账户下存在同名脚本!")
+		cheungssh_info["content"]={
+			"script":_filename,
+			"owner":username,
+			"time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),
+		}
+		REDIS.hset("scripts",_filename,json.dumps(cheungssh_info["content"],encoding="utf8",ensure_ascii=False))
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('执行脚本')
+@permission_check('cheungssh.execute_script')
+@ajax_http
+def script_init(request):
+	username=request.user.username
+	sid=request.GET.get("sid")
+	sfile=request.GET.get("sfile")
+	return CheungSSHScript.script_init(sid,sfile,username)
+@login_check.login_check('远程文件管理创建')
+@permission_check('cheungssh.remote_file_admin_create')
+@ajax_http
+def add_remote_file(request):
+	cheungssh_info={"status":False,"content":""}
+	try:
+		username=request.user.username
+		_id=str(random.randint(90000000000000000000,99999999999999999999))
+		
+		id=request.GET.get("id",_id)
+		owner=request.GET.get("owner")
+		alias=request.GET.get('alias')
+		sid=request.GET.get("server")
+		path=request.GET.get("path")
+		description=request.GET.get("description")
+		if owner==username or request.user.is_superuser:
+			cheungssh_info=RemoteFileAdmin.add_remote_file(owner=owner,path=path,description=description,id=id,server=sid,alias=alias)
+		else:
+			raise CheungSSHError("您不能把该资源授权给其他用户或者组")
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('远程文件管理列表')
+@permission_check('cheungssh.remote_file_admin_list')
+@ajax_http
+def get_remote_file_list(request):
+	super=request.user.is_superuser
+	username=request.user.username
+	return RemoteFileAdmin.get_remote_file_list(super,username)
+@ajax_http
+def delete_remote_file_list(request):
+	id=request.GET.get("id")
+	super=request.user.is_superuser
+	username=request.user.username
+	return RemoteFileAdmin.delete_remote_file_list(super,username,id)
+@login_check.login_check('远程文件内容查看')
+@permission_check('cheungssh.remote_file_admin_content_show')
+@ajax_http
+def get_remote_file_opt(request):
+	id=request.GET.get("tid")
+	action=request.GET.get('action')
+	action="GET"
+	super=request.user.is_superuser
+	username=request.user.username
+	return RemoteFileAdmin.remote_file_content(super,username,id,action)
+@login_check.login_check('远程文件内容更新')
+@permission_check('cheungssh.write_remote_file_opt')
+
+@ajax_http
+def write_remote_file_opt(request):
+	
+	action="WRITE"
+	id=request.POST.get("tid")
+	super=request.user.is_superuser
+	super=True
+	username=request.user.username
+	file_content=request.POST.get("content")
+	if not file_content.endswith('\n'):
+		file_content="%s\n" %file_content
+	return RemoteFileAdmin.remote_file_content(super,username,id,action,file_content)
+@ajax_http
+def get_my_file_list(request):
+	username=request.user.username
+	cheungssh_info={"content":[],"status":False}
+	try:
+		_dir=os.path.join(cheungssh_settings.upload_dir,username)
+		try:
+			file_list=os.listdir(_dir)
+			cheungssh_info["content"]=file_list
+		except:
+			pass
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+@login_check.login_check('创建部署任务')
+@permission_check('cheungssh.deployment_create')
+@ajax_http
+def create_deployment_task(request):
+	username=request.user.username
+	data=request.POST.get("data")
+	return DeploymentAdmin.create_task_conf(data,username)
+@login_check.login_check('部署清单查看')
+@permission_check('cheungssh.deployment_list')
+@ajax_http
+def get_deployment_task(request):
+	username=request.user.username
+	is_super=request.user.is_superuser
+	return DeploymentAdmin.get_task_conf(username,is_super)
+@login_check.login_check('删除部署任务')
+@permission_check('cheungssh.deployment_delete')
+@ajax_http
+def delete_deployment_task(request):
+	username=request.user.username
+	is_super=request.user.is_superuser
+	taskid=request.GET.get("taskid")
+	return DeploymentAdmin.delete_task_conf(username,is_super,taskid)
+@login_check.login_check('执行部署任务')
+@permission_check('cheungssh.deployment_execute')
+@ajax_http
+def start_deployment_task(request):
+	cheungssh_info={"content":"","status":False}
+	taskid=request.GET.get("taskid")
+	try:
+		if taskid is None:raise CheungSSHError("非法请求!")
+		a=DeploymentAdmin(taskid)
+		cheungssh_info=a.demo()
+	except Exception,e:
+		cheungssh_info={"content":str(e),"status":False}
+	return cheungssh_info
+@login_check.login_check('部署进度查看')
+@permission_check('cheungssh.deployment_progress')
+@ajax_http
+def get_deployment_progress(request):
+	taskid=request.GET.get("taskid")
+	cheungssh_info=DeploymentAdmin.get_progress(taskid)
+	return cheungssh_info
+
+@login_check.login_check('登录记录查看')
+@permission_check('cheungssh.login_success_history')
+@ajax_http
+def login_success_log(request):
+	cheungssh_info={"content":[],"status":True}
+	data=REDIS.lrange("CHB-R00000000101",0,-1)
+	for line in data:
+		_data=json.loads(line)
+		cheungssh_info["content"].append(_data)
+	return cheungssh_info
+
+@login_check.login_check('创建服务器')
+@permission_check('cheungssh.create_server')
+@ajax_http
+def batch_create_servers(request):
+	hosts=request.POST.get("hosts")
+	cheungssh_info={"content":"","status":False}
+	try:
+		_hosts=hosts.split('\n')
+		i=0
+		real_i=0
+		config_data=[];
+		for line in _hosts:
+			i+=1
+			line=re.sub("^ *","",line)
+			if re.search("^ *$",line):
+				
+				continue
+			elif re.search("^#",line):
+				
+				continue
+			else:
+				
+				
+				real_i+=1
+				segment=line.split()
+				if len(segment)<14:
+					raise CheungSSHError("在第【%d行】,您指定的配置字段小于14个，请您填写完整的配置信息，如果不填写的，请使用#代替!" %i)
+				_login_method=segment[4].upper()
+				_port=segment[8]
+				if not _login_method=="PASSWORD" and  not _login_method=="KEY":
+					
+					raise CheungSSHError("在第【%d】行，第5个配置字段【%s】的值应该为PASSWORD或者KEY !"%(i,_login_method))
+				try:
+					
+					int(_port)
+				except ValueError:
+					raise CheungSSHError("在第【%d】行，第9个字段，端口必须是一个数字!"%i)
+				
+				_sudo=segment[9].upper()
+				if not _sudo=="N" and not _sudo=="Y":
+					raise CheungSSHError("在第【%d】行，第10个字段，sudo方式必须为Y或者N！"%(i))
+				
+				_su=segment[11].upper()
+				if not _su=="N" and  not _su=="Y":
+					raise CheungSSHError("在第【%d】行，第12个字段，su方式必须为Y或者N！"%(i))
+				tid=str(random.randint(90000000000000000000,99999999999999999999))
+				config_line={
+					"id":tid,
+					"ip":segment[0],
+					"alias":segment[1],
+					"owner":request.user.username,
+					"group":segment[2],
+					"username":segment[3],
+					"login_method":_login_method,
+					"password":segment[5],
+					"keyfile":segment[6],
+					"keyfile_password":segment[7],
+					"port":_port,
+					"sudo":_sudo,
+					"sudo_password":segment[10],
+					"su":_su,
+					"su_password":segment[12],
+					"description":segment[13],
+				}
+				config_data.append(config_line)
+		if len(config_data)==0:
+			raise CheungSSHError("您尚未指定有效的服务器配置行！")
+		for _config_line in config_data:
+			
+			tmp=json.dumps(_config_line,encoding="utf8",ensure_ascii=False)
+			REDIS.rpush("servers.config.list",tmp)
+		cheungssh_info["content"]="已成功添加%d条记录"% len(config_data)
+		cheungssh_info["status"]=True
+	except Exception,e:
+		cheungssh_info["status"]=False
+		cheungssh_info["content"]=str(e)
+	return cheungssh_info
+	
+@login_check.login_check('',False)
+@ajax_http
+def get_login_user_list(request):
+	return CheungSSHLoginUserNotify.get_login_user_list(request)
+
+@login_check.login_check('',False)
+@permission_check('cheungssh.access_history')
+@ajax_http
+def page_access_history(request):
+	return cheungssh_page_audit.CheungSSHPageAudit.get_access_history(request)
+
+
+
+
+@login_check.login_check('创建拓扑设备')
+@permission_check('cheungssh.create_device')
+@ajax_http
+def add_device(request):
+	data=request.GET.get("device")
+	data=json.loads(data)
+	data["owner"]=request.user.username
+	return Topology.add_device(data)
+@login_check.login_check('查看拓扑')
+@permission_check('cheungssh.create_device')
+@ajax_http
+def get_device(request):
+	return Topology.get_device()
+
+@login_check.login_check('保存拓扑')
+@permission_check('cheungssh.save_topology')
+@ajax_http
+def save_topology(request):
+	data=request.GET.get("topology")
+	data=json.loads(data)
+	username=request.user.username
+	return Topology.save_topology(data,username)
+@login_check.login_check('',False)
+@ajax_http
+def my_topology(request):
+	username=request.user.username
+	return Topology.my_topology(username)
+
+@login_check.login_check('单独登录SSH')
+@permission_check('cheungssh.active_ssh')
+@ajax_http
+def active_ssh(request):
+	sid=request.GET.get("sid")
+	return CheungSSHActiveSSH().run(sid)
+
+@login_check.login_check('',False)
+@ajax_http
+def get_active_ssh_result(request):
+	log_key=request.GET.get("log_key")
+	return CheungSSHActiveSSH.get_result(log_key)
+@login_check.login_check('独立命令')
+@ajax_http
+def add_active_ssh_command(request):
+	cmd=request.GET.get("cmd")
+	cmd_key=request.GET.get("cmd_key")
+	return CheungSSHActiveSSH.add_command(cmd,cmd_key)

@@ -17,7 +17,7 @@ def crond_del(fid):
 			except Exception,e:
 				return True,False,str(e)
 			cache.set('crondlog',crondlog_show,36000000000)
-			return True,"OK"
+			return True,True
 		else:
 			return False,del_crond_file[1]
 	else:
@@ -62,7 +62,7 @@ def crond_show(request):
 			if request.user.username==crondlog_show_all[fid]['user']  or request.user.is_superuser:
 				fid_progres_info=cache.get('info:%s' % (fid))
 				if fid_progres_info: 
-					crondlog_show_all[fid]['status']=fid_progres_info['msgtype']
+					crondlog_show_all[fid]['status']=fid_progres_info['status']
 					try:
 						crondlog_show_all[fid]['lasttime']=fid_progres_info['lasttime']
 					except:

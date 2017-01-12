@@ -1,4 +1,4 @@
-
+#########################本地安装
 rpm -qa|grep -E '^gcc'
 if [ $? -ne 0 ]
 then
@@ -150,8 +150,8 @@ then
 	fi
 fi
 
-
-
+############################安装依赖包
+############################安装依赖包
 echo  "安装mysql-python"
 cd /home/cheungssh/soft &&
 tar xvf MySQL-python-1.2.3c1.tar.gz   &&
@@ -169,7 +169,7 @@ then
 	echo "安装redis服务器失败了，请检查原因"
 	exit 1
 fi
-
+#############
 cd  /home/cheungssh/soft/ &&
 tar xvf django-redis-cache-1.6.3.tar.gz  &&
 cd  django-redis-cache-1.6.3  &&
@@ -206,9 +206,9 @@ then
 	echo  "安装django-cors-headers失败"
 	exit 1
 fi
-
-
-
+#############
+#############
+#############redis安装
 while [ 1 ]
 do
 read -p  "您是否有可以使用的Mysql服务器? (y/n)" mysql
@@ -224,7 +224,7 @@ then
 	mip=${mip:-localhost}
 	musername=${musername:-root}
 	mp=${mp:-3306}
-
+#########
 	if [[ -z $mpassword ]]
                 then
                         mysql  -h${mip} -u${musername}  -P${mp}  <<EOF
@@ -337,6 +337,6 @@ echo   "
 
 ####
 
-
-
-
+#########################
+#########################
+#########################

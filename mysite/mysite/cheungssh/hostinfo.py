@@ -10,7 +10,7 @@ from permission_check import permission_check
 def hostinfo(request):
 	callback=request.GET.get('callback')
 	group=request.GET.get('group')
-	hostinfo={"msgtype":"OK","content":[]}
+	hostinfo={"status":True,"content":[]}
 	username=request.user.username
 	group=request.GET.get('group')
 	t_groupinfo=cache.get("allconf")
@@ -38,11 +38,11 @@ def hostinfo(request):
 def get_progres(request):
 	fid=request.GET.get('fid')
 	callback=request.GET.get('callback')
-	info={"msgtype":"OK","content":""}
+	info={"status":True,"content":""}
 	fid="info:%s"%(fid)
 	t_info=cache.get(fid)
 	if t_info is None:
-		info["status"]="ERR"
+		info["status"]=False
 		info['content']='No-exists'.decode('utf-8')
 		print '不存在'
 	else:
@@ -57,8 +57,9 @@ def get_progres(request):
 @login_check.login_check('',False)
 def groupinfoall(request):
 	callback=request.GET.get("callback")
-	allconfinfo={"msgtype":"OK","content":{}}
+	allconfinfo={"status":True,"content":{}}
 	username=request.user.username
+	pagenum=request.GET.get('pagenum')
 	t_allconfinfo=cache.get("allconf")
 	if t_allconfinfo is None:
 		data=ServerConf.objects.all()
@@ -82,9 +83,9 @@ def groupinfoall(request):
 			cache.set("allconf",allconfinfo,360000)
         else:
 		for b in t_allconfinfo['content'].keys():
-			t_allconfinfo['content'][b]['password']="**********"
-			t_allconfinfo['content'][b]['supassword']="**********"
-			t_allconfinfo['content'][b]['sudopassword']="**********"
+			t_allconfinfo['content'][b]['password']    ="****************************"
+			t_allconfinfo['content'][b]['supassword']  ="******"
+			t_allconfinfo['content'][b]['sudopassword']="******"
                 allconfinfo=t_allconfinfo	
 	
 	allconfinfo_web=[]
@@ -105,11 +106,11 @@ def groupinfoall(request):
 	response=HttpResponse(info)
 	response["Access-Control-Allow-Origin"] = "*"
 	response["Access-Control-Allow-Methods"] = "POST"
-	response["Access-Control-Allow-Credentials"] = "true"
+	response["Access-Control-Allow-Credentials"] = True
         return response
 @login_check.login_check('',False)
 def groupinfo(request):
-        groupinfo={"msgtype":"OK","content":[]}
+        groupinfo={"status":True,"content":[]}
         callback=request.GET.get("callback")
 	username=request.user.username
         t_groupinfo=cache.get("allconf")
@@ -138,7 +139,7 @@ def groupinfo(request):
 @login_check.login_check('文件传输日志',False)
 @permission_check('cheungssh.transfile_history_show')
 def translog(request):
-	info={"msgtype":"OK",'content':""}
+	info={"status":True,'content':""}
 	callback=request.GET.get("callback")
 	cache_translog=cache.get("translog")
 	if not  cache_translog:

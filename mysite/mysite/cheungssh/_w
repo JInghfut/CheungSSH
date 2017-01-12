@@ -22,7 +22,7 @@ cmdfile="/home/cheungssh/data/cmd/cmdfile"
 def cheungssh_index(request):
 	return render_to_response("cheungssh/cheungSSH.html")
 def cheungssh_login(request):
-	info={"msgtype":"ERR","content":"","auth":"no"}
+	info={"status":"ERR","content":"","auth":"no"}
 	client_ip=request.META['REMOTE_ADDR']
 	print '登录:',client_ip
 	try:
@@ -48,7 +48,7 @@ def cheungssh_login(request):
 				print "成功登陆"
 				login(request,user)
 				request.session["username"]=username
-				info["msgtype"]="OK"
+				info["status"]="OK"
 				info['auth']="yes"
 				request.session.set_expiry(0)
 				if cache.has_key(limit_ip):cache.delete(limit_ip)
@@ -78,12 +78,12 @@ def cheungssh_login(request):
         response["Access-Control-Allow-Methods"] = "POST"
         response["Access-Control-Allow-Credentials"] = "true"
         return response
-
+###############
 	info=json.dumps(info)
 	print info
 	return HttpResponse(info)
 def cheungssh_logout(request):
-	info={'msgtype':'OK'}
+	info={'status':'OK'}
 	if request.user.is_authenticated():
 		logout(request)
 	info=json.dumps(info)
@@ -95,7 +95,7 @@ def cheungssh_logout(request):
 	return HttpResponse(backstr)
 def download_file(request):
 	#定义一个list，然后操作系统去tar
-	info={"msgtype":"ERR","content":""}
+	info={"status":"ERR","content":""}
 	file=request.GET.get('file')
 	callback=request.GET.get('callback')
 	try:
@@ -103,7 +103,7 @@ def download_file(request):
 		if not  type([])==type(file):
 			info['content']='传入的参数不是一个[]'
 		else:
-			info['msgtype']='OK'
+			info['status']='OK'
 	except Exception,e:
 		info["content"]="传入的参数不是一个json格式"
 	downfile=str(random.randint(90000000000000000000,99999999999999999999)) + '.tar.gz '
@@ -114,15 +114,15 @@ def download_file(request):
 	T=commands.getstatusoutput(cmd)
 	if not  T[0]==0:
 		info['content']=T[1]
-		info['msgtype']='ERR'
+		info['status']='ERR'
 		os.system("/bin/rm %s" % downfile)
 	else:
-		info["msgtype"]='OK'
+		info["status"]='OK'
 		server_head=request.META['HTTP_HOST']
 		info["url"]="http://%s/cheungssh/download/%s" % (server_head,downfile)
 		
-	#如果访问正确， 就返回msgtype=OK， 并且有一个URL值
-	#如果失败，则msgtype是ERRO，并且content是错误信息
+	#如果访问正确， 就返回status=OK， 并且有一个URL值
+	#如果失败，则status是ERRO，并且content是错误信息
 
 
 
@@ -137,7 +137,7 @@ def download_file(request):
 	
 @login_check.login_check()
 def keyshow(request):
-	info={"msgtype":"ERR","content":""}
+	info={"status":"ERR","content":""}
 	callback=request.GET.get('callback')
 	show_type=request.GET.get('show_type')
 	try:
@@ -154,7 +154,7 @@ def keyshow(request):
 			info['content']=keyfile_list
 		else:
 			info["content"]=content
-		info['msgtype']="OK"
+		info['status']="OK"
 	except Exception,e:
 		info["content"]=str(e)
 		print e
@@ -166,7 +166,7 @@ def keyshow(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def delkey(request):
-	info={"msgtype":"ERR","content":"","path":""}
+	info={"status":"ERR","content":"","path":""}
 	callback=request.GET.get('callback')
 	fid=request.GET.get('fid')
 	try:
@@ -179,7 +179,7 @@ def delkey(request):
 				pass
 			del alllogline[fid]
 			cache.set('keyfilelog',alllogline,3600000)
-			info["msgtype"]="OK"
+			info["status"]="OK"
 	except Exception,e:
 		info["content"]=str(e)
 	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
@@ -192,7 +192,7 @@ def delkey(request):
 #@login_check.login_check()
 def upload_file_test(request):
 	fid=str(random.randint(90000000000000000000,99999999999999999999))
-	info={"msgtype":"ERR","content":"","path":""}
+	info={"status":"ERR","content":"","path":""}
 	#login_check_info=login_check.login_check()(request)
 	#if not login_check_info[0]:return HttpResponse(login_check_info[1])
 	upload_type=request.GET.get('upload_type')
@@ -230,7 +230,7 @@ def upload_file_test(request):
 			t=open(file_position,"wb")
 			t.write(filecontent)
 			t.close()
-			info["msgtype"]="OK"
+			info["status"]="OK"
 			info["path"]=file_position
 			if upload_type=="keyfile":info=logline
 		except Exception,e:
@@ -264,12 +264,12 @@ def upload_file_test(request):
 @login_check.login_check()
 def filetrans(request):
 	fid=str(random.randint(90000000000000000000,99999999999999999999))
-	info={"msgtype":"OK","fid":fid}
+	info={"status":"OK","fid":fid}
 	host=request.GET.get('host')
 	action=request.GET.get('action')
 	callback=request.GET.get('callback')
 	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	redis_info={"msgtype":"OK","content":"","progres":"0",'status':"running","lasttime":lasttime}
+	redis_info={"status":"OK","content":"","progres":"0",'status':"running","lasttime":lasttime}
 	cache.set("info:%s" % (fid),redis_info,360000)
 	user=request.user.username
 	if action and host:
@@ -279,7 +279,7 @@ def filetrans(request):
 		else:
 			FileTransfer.getconf(host,fid,user,"download")
 	else:
-		info["msgtype"]="ERR"
+		info["status"]="ERR"
 		info["content"]="请求格式错误"
 	info=json.dumps(info)
 	if callback is None:
@@ -293,7 +293,7 @@ def haha(request):
 	return HttpResponse('haha')
 @login_check.login_check()
 def pathsearch(request):
-	info={'msgtype':"OK","content":""}
+	info={'status':"OK","content":""}
 	callback=request.GET.get('callback')
 	path=request.GET.get('path')
 	pathinfo=path_search.get_query_string(path)
@@ -310,7 +310,7 @@ def configmodify(request):
 	modify_type=request.GET.get('type')
 	callback=request.GET.get('callback')
 	host=request.GET.get('host')
-	info={"msgtype":"ERR","content":"","id":""}
+	info={"status":"ERR","content":"","id":""}
 	username=request.user.username
 	if modify_type=='del':
 		try:
@@ -336,7 +336,7 @@ def configmodify(request):
 							continue
 						else:
 							t_allgroupall['content'][id][b]=host[b]
-							info['msgtype']='OK'
+							info['status']='OK'
 							cache.set('allconf',t_allgroupall,36000000000000)
 							break
 				else:
@@ -355,9 +355,9 @@ def configmodify(request):
 			if t_allgroupall:
 				t_allgroupall['content'][id]=host
 			else:
-				t_allgroupall={"msgtype":"OK","content":{}}
+				t_allgroupall={"status":"OK","content":{}}
 				t_allgroupall['content'][id]=host
-			info['msgtype']='OK'
+			info['status']='OK'
 			info['id']=id
 			cache.set('allconf',t_allgroupall,36000000000)
 		elif modify_type=='del':
@@ -371,14 +371,14 @@ def configmodify(request):
 								del t_allgroupall['content'][id]
 							except KeyError:
 								pass
-							info['msgtype']='OK'
+							info['status']='OK'
 						else:
 							info['content']="非法操作"
 							break
 				cache.set('allconf',t_allgroupall,360000000000)
 			except KeyError:
 				#info['content']="服务器不存在该配置"
-				info['msgtype']='OK'
+				info['status']='OK'
 
 			except Exception,e:
 				info['content']=str(e)
@@ -397,10 +397,10 @@ def configmodify(request):
 def delcrondlog(request):
 	callback=request.GET.get('callback')
 	fid=request.GET.get('fid')
-	info={"msgtype":"ERR","content":""}
+	info={"status":"ERR","content":""}
 	delcrond_log=crond_record.crond_del(fid)
 	if delcrond_log[0]:
-		info['msgtype']='OK'
+		info['status']='OK'
 	else:
 		info['content']=delcrond_log[1]
 	info=json.dumps(info,encoding='utf-8')
@@ -412,7 +412,7 @@ def delcrondlog(request):
 @login_check.login_check()
 def showcrondlog(request):
 	callback=request.GET.get('callback')
-	info={"msgtype":"OK","content":""}
+	info={"status":"OK","content":""}
 	crondlog_log=crond_record.crond_show()[1]
 	info['content']=crondlog_log
 	info=json.dumps(info,encoding='utf-8')
@@ -429,7 +429,7 @@ def crontab(request):
 	value=request.GET.get('value')
 	runtime=request.GET.get('runtime')
 	runtype=request.GET.get('type')
-	info={"msgtype":"ERR","content":""}
+	info={"status":"ERR","content":""}
 	crond_status=commands.getstatusoutput('/etc/init.d/crond status')
 	crondlog_value={}
 	if not crond_status[0]==0:
@@ -465,7 +465,7 @@ def crontab(request):
 					a.close()
 					crond_write=commands.getstatusoutput("""/usr/bin/crontab %s""" % (crond_file))
 					if int(crond_write[0])==0:
-						info['msgtype']='OK'
+						info['status']='OK'
 						crond_record.crond_record(value_to_log)
 					else:
 						print "加入计划任务失败",crond_write[1],crond_write[0]
@@ -492,12 +492,12 @@ def crontab(request):
 								#加载到计划任务中
 								crond_write=commands.getstatusoutput("""/usr/bin/crontab %s""" % (crond_file))
 								if int(crond_write[0])==0:
-									info['msgtype']='OK'
+									info['status']='OK'
 									crond_record.crond_record(value_to_log) #写入redis日志记录
 								else:
 									print "加入计划任务失败",crond_write[1],crond_write[0]
 									info['content']=crond_write[1]
-								
+								#########
 							except Exception,e:
 								info['content']=str(e)
 						except Exception,e:
@@ -521,7 +521,7 @@ def crontab(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def local_upload_show(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	local_upload_all=cache.get('local_upload')
 	if local_upload_all:
@@ -534,7 +534,7 @@ def local_upload_show(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def excutecmd(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	cmd=request.GET.get('cmd')
 	rid=request.GET.get("rid")
@@ -550,7 +550,7 @@ def excutecmd(request):
 		Data=DataConf.DataConf()
 		a=threading.Thread(target=cheungssh_web.main,args=(cmd,ie_key,selectserver,Data))
 		a.start()
-		info['msgtype']="OK"
+		info['status']="OK"
 	except Exception,e:
 		info['content']=str(e)
 	try:#写下记录
@@ -576,7 +576,7 @@ def excutecmd(request):
 		cache.set('cmd_history',cmd_history,8640000000)
 	except Exception,e:
 		print "发生错误",e
-		info['msgtype']='ERR'
+		info['status']='ERR'
 		info['content']=str(e)
 	info=json.dumps(info)
 	if callback is None:
@@ -586,12 +586,12 @@ def excutecmd(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def cmdhistory(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	cmd_history=cache.get('cmd_history')
 	if  cmd_history:
 		info['content']=cmd_history.values()
-	info['msgtype']='OK'
+	info['status']='OK'
 	info=json.dumps(info,encoding='utf-8')
 	if callback is None:
 		backstr=info
@@ -600,10 +600,10 @@ def cmdhistory(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def get_hwinfo(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	info['content']=hwinfo.hwinfo(cache)
-	info['msgtype']='OK'
+	info['status']='OK'
 	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
 	if callback is None:
 		backstr=info
@@ -612,7 +612,7 @@ def get_hwinfo(request):
 	return HttpResponse(backstr)
 @login_check.login_check(False)
 def operation_record(request):	
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	get_login_record=cache.get('login_record')
 	if get_login_record:	
@@ -626,7 +626,7 @@ def operation_record(request):
 	return HttpResponse(backstr)
 @login_check.login_check()
 def excutes_script(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
 	if callback is None:
@@ -636,7 +636,7 @@ def excutes_script(request):
 @login_check.login_check()
 def get_script(request):
 	fid=str(random.randint(90000000000000000000,99999999999999999999))   #这个是fileid
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	edit_type=request.GET.get('edit_type')
 	#login_check_info=login_check.login_check()(request)
@@ -650,7 +650,7 @@ def get_script(request):
 				scriptfilepath=os.path.join(scriptfiledir,filename)
 				with open(scriptfilepath) as f:
 					scriptfilecontent=f.read().strip()
-				info['msgtype']='OK'
+				info['status']='OK'
 				info['content']=scriptfilecontent
 			except Exception,e:
 				info['content']=str(e)
@@ -659,7 +659,7 @@ def get_script(request):
 			scriptlogline=cache.get('scriptlogline')
 			if scriptlogline:
 				info['content']=scriptlogline.values()
-			info['msgtype']='OK'
+			info['status']='OK'
 		elif edit_type=='add': #是scriptlogline {filename :  {文件属性}}
 			try:
 				scriptfilecontent=request.POST.get('filecontent')
@@ -675,7 +675,7 @@ def get_script(request):
 				if scriptlogline is None:scriptlogline={}
                         	scriptlogline[filename]=logline
                         	cache.set('scriptlogline',scriptlogline,36000000000000)
-				info['msgtype']='OK'
+				info['status']='OK'
 				info['content']=logline
 			except Exception,e:
 				info['content']=str(e)
@@ -692,9 +692,9 @@ def get_script(request):
 						print '错误',e
 						info['content']=str(e)
 						break
-					info['msgtype']='OK'
+					info['status']='OK'
 			else:
-					info['msgtype']='OK'
+					info['status']='OK'
 				
 	except Exception,e:
 		print e,'错误'
@@ -714,7 +714,7 @@ def get_script(request):
 		backstr=info
 	return HttpResponse(backstr)
 def onelinenotice(request):
-	info={'msgtype':'ERR','content':[]}
+	info={'status':'ERR','content':[]}
 	callback=request.GET.get('callback')
 	login_check_info=login_check.login_check()(request)
 	if not login_check_info[0]:return HttpResponse(login_check_info[1])
@@ -730,19 +730,19 @@ def t1(request):
 	return HttpResponse(request.user)
 @login_check.login_check()
 def sshcheck(request):
-	info={"msgtype":"OK","content":"","status":"ERR"}
+	info={"status":"OK","content":"","status":"ERR"}
 	callback=request.GET.get('callback')
 	id=request.GET.get('id')
 	try:
 		conf=db_to_redis_allconf.allhostconf()['content'][id]
 		sshcheck=ssh_check.ssh_check(conf)
-		if sshcheck['msgtype']=="OK":
+		if sshcheck['status']=="OK":
 			info['status']="OK"
 		else:
 			info['status']="ERR"
 			info['content']=sshcheck['content']
 	except KeyError:
-		info['msgtype']='ERR'
+		info['status']='ERR'
 		info['content']="服务器不存在"
 	info=json.dumps(info,encoding='utf-8',ensure_ascii=False)
 	if callback is None:

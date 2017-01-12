@@ -81,7 +81,7 @@ CREATE TABLE `auth_permission` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `content_type_id` (`content_type_id`,`codename`),
   KEY `auth_permission_e4470c6e` (`content_type_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=61 DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM AUTO_INCREMENT=65 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -90,7 +90,7 @@ CREATE TABLE `auth_permission` (
 
 LOCK TABLES `auth_permission` WRITE;
 /*!40000 ALTER TABLE `auth_permission` DISABLE KEYS */;
-INSERT INTO `auth_permission` VALUES (25,'可执行命令',8,'excute_cmd'),(26,'查看命令历史',8,'show_cmd_history'),(27,'查看操作记录',8,'show_access_page'),(28,'允许从PC上传文件和密钥',8,'local_file_upload'),(29,'允许PC下载文件',8,'local_file_download'),(30,'远程文件上传',8,'transfile_upload'),(31,'远程文件下载',8,'transfile_download'),(32,'查看文件传输记录',8,'transfile_history_show'),(33,'查看计划任务',8,'crond_show'),(34,'删除计划任务',8,'crond_del'),(35,'创建计划任务',8,'crond_create'),(36,'秘钥上传',8,'transfile_keyfile'),(37,'删除秘钥',8,'key_del'),(38,'查看秘钥',8,'key_list'),(39,'创建服务器',8,'config_add'),(40,'删除服务器',8,'config_del'),(41,'修改服务器',8,'config_modify'),(42,'查看脚本内容',8,'scriptfile_show'),(43,'创建脚本',8,'scriptfile_add'),(44,'删除脚本',8,'scriptfile_del'),(45,'显示脚本清单',8,'scriptfile_list'),(46,'批量从web创建服务器',8,'batchconfig_web'),(47,'添加命令黑名单',8,'addblackcmd'),(48,'删除命令黑名单 ',8,'delblackcmd'),(49,'查看命令黑名单',8,'listblackcmd'),(50,'查看登录记录',8,'show_sign_record'),(51,'查看锁定的IP记录',8,'show_ip_limit'),(52,'删除锁定的IP记录',8,'del_ip_limit'),(53,'查看登陆失败次数阈值',8,'show_threshold'),(54,'设置登录失败次数阈值',8,'set_threshold');
+INSERT INTO `auth_permission` VALUES (1,'Can add permission',1,'add_permission'),(2,'Can change permission',1,'change_permission'),(3,'Can delete permission',1,'delete_permission'),(4,'Can add group',2,'add_group'),(5,'Can change group',2,'change_group'),(6,'Can delete group',2,'delete_group'),(7,'Can add user',3,'add_user'),(8,'Can change user',3,'change_user'),(9,'Can delete user',3,'delete_user'),(10,'Can add content type',4,'add_contenttype'),(11,'Can change content type',4,'change_contenttype'),(12,'Can delete content type',4,'delete_contenttype'),(13,'Can add session',5,'add_session'),(14,'Can change session',5,'change_session'),(15,'Can delete session',5,'delete_session'),(16,'Can add cors model',6,'add_corsmodel'),(17,'Can change cors model',6,'change_corsmodel'),(18,'Can delete cors model',6,'delete_corsmodel'),(19,'Can add main_ conf',7,'add_main_conf'),(20,'Can change main_ conf',7,'change_main_conf'),(21,'Can delete main_ conf',7,'delete_main_conf'),(22,'Can add server conf',8,'add_serverconf'),(23,'Can change server conf',8,'change_serverconf'),(24,'Can delete server conf',8,'delete_serverconf'),(25,'可执行命令',8,'excute_cmd'),(26,'查看命令历史',8,'show_cmd_history'),(27,'查看操作记录',8,'show_access_page'),(28,'允许从PC上传文件和密钥',8,'local_file_upload'),(29,'允许PC下载文件',8,'local_file_download'),(30,'远程文件上传',8,'transfile_upload'),(31,'远程文件下载',8,'transfile_download'),(32,'查看文件传输记录',8,'transfile_history_show'),(33,'查看计划任务',8,'crond_show'),(34,'删除计划任务',8,'crond_del'),(35,'创建计划任务',8,'crond_create'),(36,'秘钥上传',8,'transfile_keyfile'),(37,'删除秘钥',8,'key_del'),(38,'查看秘钥',8,'key_list'),(39,'创建服务器',8,'config_add'),(40,'删除服务器',8,'config_del'),(41,'修改服务器',8,'config_modify'),(42,'查看脚本内容',8,'scriptfile_show'),(43,'创建脚本',8,'scriptfile_add'),(44,'删除脚本',8,'scriptfile_del'),(45,'显示脚本清单',8,'scriptfile_list'),(46,'批量从web创建服务器',8,'batchconfig_web'),(47,'添加命令黑名单',8,'addblackcmd'),(48,'删除命令黑名单 ',8,'delblackcmd'),(49,'查看命令黑名单',8,'listblackcmd'),(50,'查看登录记录',8,'show_sign_record'),(51,'查看锁定的IP记录',8,'show_ip_limit'),(52,'删除锁定的IP记录',8,'del_ip_limit'),(53,'查看登陆失败次数阈值',8,'show_threshold'),(54,'设置登录失败次数阈值',8,'set_threshold'),(55,'查看远程服务器文件内容',8,'get_remote_filecontent'),(56,'更新远程服务器文件内容',8,'up_remote_filecontent'),(57,'查看所有文件清单',8,'catadminfilelist'),(58,'可设置文件清单',8,'setadminfilelist'),(59,'Can add server info',9,'add_serverinfo'),(60,'Can change server info',9,'change_serverinfo'),(61,'Can delete server info',9,'delete_serverinfo'),(62,'Can add log entry',10,'add_logentry'),(63,'Can change log entry',10,'change_logentry'),(64,'Can delete log entry',10,'delete_logentry');
 /*!40000 ALTER TABLE `auth_permission` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -115,7 +115,7 @@ CREATE TABLE `auth_user` (
   `date_joined` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
-) ENGINE=MyISAM AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -124,7 +124,7 @@ CREATE TABLE `auth_user` (
 
 LOCK TABLES `auth_user` WRITE;
 /*!40000 ALTER TABLE `auth_user` DISABLE KEYS */;
-INSERT INTO `auth_user` VALUES (1,'cheungssh','','','sQ@q.com','pbkdf2_sha256$10000$dx7FZocLn2oq$mabr888RKSjOjzOeR4vjxvxRomhA3cWCqiNS4pGYi+A=',1,1,1,'2015-12-06 01:45:17','2015-12-03 09:41:28');
+INSERT INTO `auth_user` VALUES (1,'cheungssh','','','a@q.com','pbkdf2_sha256$10000$R9DwH0xFGDrE$rf48YiLlVPWxOKf0/Qb10ChPnAMuB464CiLnVWd/XGg=',1,1,1,'2015-12-11 01:14:39','2015-12-11 01:14:39');
 /*!40000 ALTER TABLE `auth_user` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -170,7 +170,7 @@ CREATE TABLE `auth_user_user_permissions` (
   UNIQUE KEY `user_id` (`user_id`,`permission_id`),
   KEY `auth_user_user_permissions_fbfc09f1` (`user_id`),
   KEY `auth_user_user_permissions_1e014c8f` (`permission_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=126 DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -320,7 +320,7 @@ CREATE TABLE `django_admin_log` (
   PRIMARY KEY (`id`),
   KEY `django_admin_log_fbfc09f1` (`user_id`),
   KEY `django_admin_log_e4470c6e` (`content_type_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=9 DEFAULT CHARSET=utf8;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -329,7 +329,6 @@ CREATE TABLE `django_admin_log` (
 
 LOCK TABLES `django_admin_log` WRITE;
 /*!40000 ALTER TABLE `django_admin_log` DISABLE KEYS */;
-INSERT INTO `django_admin_log` VALUES (1,'2015-12-03 09:42:24',1,3,'2','t',1,''),(2,'2015-12-03 09:42:42',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(3,'2015-12-03 09:48:35',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(4,'2015-12-03 10:00:17',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(5,'2015-12-03 10:01:17',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(6,'2015-12-03 10:05:00',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(7,'2015-12-03 10:11:03',1,3,'2','t',2,'已修改 password 和 user_permissions 。'),(8,'2015-12-05 11:42:00',1,3,'2','t',3,'');
 /*!40000 ALTER TABLE `django_admin_log` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -382,7 +381,6 @@ CREATE TABLE `django_session` (
 
 LOCK TABLES `django_session` WRITE;
 /*!40000 ALTER TABLE `django_session` DISABLE KEYS */;
-INSERT INTO `django_session` VALUES ('6046062f0e44cba3fa7d2c25dceae0b1','YWVhYTgzZDMxMjljZjA5NmI5MzQyNDQ3YWRiNzI1YTcwODU3NjJkNTqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ1fYXV0aF91c2VyX2lkcQSKAQFVEl9hdXRoX3VzZXJfYmFja2Vu\nZHEFVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEGVQ9fc2Vzc2lv\nbl9leHBpcnlxB0sAdS4=\n','2015-12-17 10:40:39'),('747059c12bfe4a9b036fd5ddaba303fc','NTViZjNkMWY3YmEyMzhmZTAwYzVlZjU5NWRiNzAyNTE5YjQwNGZkMTqAAn1xAShVCHVzZXJuYW1l\ncQJYAQAAAHRVD19zZXNzaW9uX2V4cGlyeXEDSwBVEl9hdXRoX3VzZXJfYmFja2VuZHEEVSlkamFu\nZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEFVQ1fYXV0aF91c2VyX2lkcQaK\nAQJ1Lg==\n','2015-12-17 09:42:56'),('66c85d372c328c179ebdbe3779096304','NTViZjNkMWY3YmEyMzhmZTAwYzVlZjU5NWRiNzAyNTE5YjQwNGZkMTqAAn1xAShVCHVzZXJuYW1l\ncQJYAQAAAHRVD19zZXNzaW9uX2V4cGlyeXEDSwBVEl9hdXRoX3VzZXJfYmFja2VuZHEEVSlkamFu\nZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEFVQ1fYXV0aF91c2VyX2lkcQaK\nAQJ1Lg==\n','2015-12-17 09:58:02'),('68c9a3b68f3643a33bbaca9d80e95060','NTViZjNkMWY3YmEyMzhmZTAwYzVlZjU5NWRiNzAyNTE5YjQwNGZkMTqAAn1xAShVCHVzZXJuYW1l\ncQJYAQAAAHRVD19zZXNzaW9uX2V4cGlyeXEDSwBVEl9hdXRoX3VzZXJfYmFja2VuZHEEVSlkamFu\nZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEFVQ1fYXV0aF91c2VyX2lkcQaK\nAQJ1Lg==\n','2015-12-17 10:09:05'),('c06364514871a4521ee8df260fe91eb9','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-18 03:22:33'),('3a24d6a635ad291afd80a6d138268434','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-18 04:36:11'),('12f554d8bbefc9a72694d23d35b75428','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-18 04:37:15'),('89cd8384acd1360487ae741adb04adaf','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-18 07:25:53'),('e8ad03e6559ec3701142eb0724aa306c','ZWUwZTllMGQ2NDkzYjcxMTVmNWRkZmI1MTg5YjVlOTE3NDQ4Y2NhNzqAAn1xAShVEl9hdXRoX3Vz\nZXJfYmFja2VuZHECVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHED\nVQ1fYXV0aF91c2VyX2lkcQSKAQF1Lg==\n','2015-12-19 03:09:27'),('4f50ee2ff8c71addb67f217bab321cd5','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-19 05:32:53'),('76095730f36d5b330ab44dceb5f6aabe','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-19 11:12:46'),('3f926c73d478580e6975cfd23760ba3e','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-19 11:23:57'),('dc3d14cc5dbdc3566f812685928068c0','ZTJjNTY1Yzk2ZWFhY2Q0ODBiZDJmNGRlNTE3YTY5ZDhjMzNkYTVlMjqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ9fc2Vzc2lvbl9leHBpcnlxBEsAVRJfYXV0aF91c2VyX2JhY2tl\nbmRxBVUpZGphbmdvLmNvbnRyaWIuYXV0aC5iYWNrZW5kcy5Nb2RlbEJhY2tlbmRxBlUNX2F1dGhf\ndXNlcl9pZHEHigEBdS4=\n','2015-12-19 11:23:57'),('f2494ac6431cd19cc59745bc150a0537','YWVhYTgzZDMxMjljZjA5NmI5MzQyNDQ3YWRiNzI1YTcwODU3NjJkNTqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ1fYXV0aF91c2VyX2lkcQSKAQFVEl9hdXRoX3VzZXJfYmFja2Vu\nZHEFVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEGVQ9fc2Vzc2lv\nbl9leHBpcnlxB0sAdS4=\n','2015-12-19 11:43:30'),('4f571b1afa3a37efbf904e65f8d754b0','ZWUwZTllMGQ2NDkzYjcxMTVmNWRkZmI1MTg5YjVlOTE3NDQ4Y2NhNzqAAn1xAShVEl9hdXRoX3Vz\nZXJfYmFja2VuZHECVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHED\nVQ1fYXV0aF91c2VyX2lkcQSKAQF1Lg==\n','2015-12-19 11:41:44'),('6fd6db373ad210a7cc96719bb80be4b6','YWVhYTgzZDMxMjljZjA5NmI5MzQyNDQ3YWRiNzI1YTcwODU3NjJkNTqAAn1xAShVCHVzZXJuYW1l\ncQJYCQAAAGNoZXVuZ3NzaHEDVQ1fYXV0aF91c2VyX2lkcQSKAQFVEl9hdXRoX3VzZXJfYmFja2Vu\nZHEFVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHEGVQ9fc2Vzc2lv\nbl9leHBpcnlxB0sAdS4=\n','2015-12-19 14:49:45'),('2b6b2229ed31e4f61c33b1bde36a435a','ZWUwZTllMGQ2NDkzYjcxMTVmNWRkZmI1MTg5YjVlOTE3NDQ4Y2NhNzqAAn1xAShVEl9hdXRoX3Vz\nZXJfYmFja2VuZHECVSlkamFuZ28uY29udHJpYi5hdXRoLmJhY2tlbmRzLk1vZGVsQmFja2VuZHED\nVQ1fYXV0aF91c2VyX2lkcQSKAQF1Lg==\n','2015-12-20 01:45:17');
 /*!40000 ALTER TABLE `django_session` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -395,4 +393,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2015-12-06  9:45:56
+-- Dump completed on 2015-12-11  9:15:02

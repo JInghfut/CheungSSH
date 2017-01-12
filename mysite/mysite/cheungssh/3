@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+#coding:utf-8
+import threading,Queue
+from cheungssh_auto_thread import AutoGetThreadNum
+import time
+from cheungssh_modul_controler import CheungSSHControler
+
+
+
+class CheungSSHThreadAdmin(CheungSSHControler):
+	def __init__(self):
+		CheungSSHControler.__init__(self)
+		#####是什么类型的任务，有contorler解析
+		#self.start_ssh()
+		#self.run() ######开始执行部署任务
+	def start_ssh(self,servers):
+		pool=CheungSSHPool()
+		for id in servers:  #######循环服务器
+			pool.add_task(self.connect,servers) ########传输连接的方法
+		pool.all_complete() #######等待所有的连接建立
+		print  "done"
+	def run(self,parameter={}):
+		servers=parameter["servers"]
+		multi_thread=parameter.get("multi_thread",False)  #####默认是单线程
+		self.start_ssh(servers) #####事先开启所有机器的连接
+		if multi_thread:
+			#####多线程模式
+			pool=CheungSSHPool()
+			for s in servers:
+				pool.add_task(self.controler_center,parameter)
+			pool.all_complete()
+		else:
+			#####单线程模式
+			self.controler_center(parameter)
+			
+		
+		
+		
+	
+		
+	
+
+
+class CheungSSHThread(threading.Thread):
+	def __init__(self,queue):
+		threading.Thread.__init__(self)
+		self.queue=queue
+		self.daemon=True
+		self.start()
+	def run(self):
+		while True:
+			try:
+				func,kws=self.queue.get()
+				func(**kws)
+			except Exception,e:
+				pass
+			self.queue.task_done()
+
+
+class CheungSSHPool(AutoGetThreadNum):
+	def __init__(self):
+		AutoGetThreadNum.__init__(self)
+		self.thread_num=self.auto_thread() ######根据运算获取适合的线程数量
+		self.queue=Queue.Queue(self.thread_num)
+		for i in range(self.thread_num):
+			CheungSSHThread(self.queue)
+	def add_task(self,func,kws):
+		self.queue.put((func,kws))
+	def all_complete(self):
+		self.queue.join()
+def test_func(username=''):
+	time.sleep(1)
+	print '你好',username
+
+if __name__=='__main__':
+	p=CheungSSHPool()
+	for i in range(20):
+		p.add_task(test_func,{"username":i})
+	p.all_complete()

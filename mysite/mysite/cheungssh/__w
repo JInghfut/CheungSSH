@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+#coding:utf-8
+import os,sys,json
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mysite.settings")
+sys.path.append('/home/cheungssh/mysite')
+from django.core.cache import cache
+
+class CheungSSHControler(object):	
+	def __init__(self):
+		#######需要传递redis连接
+		self.REDIS=cache.master_client
+	def command_contorler(self,id,command):
+		pass
+	def convert_id_to_ip(self,id):
+		#######返回一个服务器的配置行 {"ip","port"...}
+		cheungssh_info={"status":False,"content":""}
+		try:
+			servers_list=self.REDIS.lrange("servers.config.list",0,1) ######[{},{id...}]
+			print servers_list,77777777777777777777777777777777777777777777777
+			if servers_list is None:pass #######默认就是错误的空的
+			else:
+				for _line in servers_list:
+					line=json.loads(_line)
+					print str(id),line,44444445555555555555555555556666
+					if str(id)==line["id"]:
+						cheungssh_info["content"]=line ######返回服务器的整个配置
+						cheungssh_info["status"]=True
+						break
+			cheungssh_info["content"]="指定的ID不存在"
+		except Exception,e:
+			cheungssh_info["status"]=False
+			cheungssh_info["content"]=str(e)
+		return cheungssh_info
+		
+		
+		

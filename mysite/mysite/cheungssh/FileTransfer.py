@@ -12,29 +12,27 @@ download_dir="/home/cheungssh/download/"
 from sftp_download_dir import cheungssh_sftp
 def set_progres(fid,filenum,ifile,isdir,transferred, toBeTransferred):
 	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	info={"fid":fid,"msgtype":"OK","content":"","progres":"","allsize":"",'status':"running","lasttime":lasttime}
+	info={"fid":fid,"status":True,"content":"","progres":"","allsize":"",'status':"running","lasttime":lasttime}
 	cache_size_id="fid:size:%s" %(fid)
 	if isdir:
 		allsize=filenum
 		nowsize=ifile
 		progres="%0.2f" % (float(nowsize)/float(allsize)*100)
-		print '::::%s:::%s::::::::%s' %(nowsize,allsize,progres)
 	else:
 		allsize=toBeTransferred
 		nowsize=transferred
 		allsize+=0.0001
 		progres="%0.2f" % (float(nowsize)/float(allsize)/filenum *100)
 		if transferred==toBeTransferred:
-			info['status']='OK'
-			info['msgtype']='OK'
+			info['status']='True'
+			info['status']='True'
 			progres=100
-	if progres=="100.00":info["msgtype"]="OK"
+	if progres=="100.00":info["status"]=True
 	info['allsize']=allsize
 	info["progres"]=progres
 	try:
 		cache.set("info:%s"%(fid),info,600)
 		cache.set(cache_size_id,allsize,360000000)
-		print info,6666666666666666666666666666666666666666666
 	except Exception,e:
 		print '发生错误',e
 		pass
@@ -43,10 +41,10 @@ def DownFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopasswo
 	dfile=os.path.basename(dfile)
 	dfile=os.path.join(download_dir,dfile)
 	model="transfile_downfile"
-	info={"msgtype":"OK","content":"","status":"running","progres":"0"}
+	info={"status":True,"content":"","status":"running","progres":"0"}
 	translog=[]
 	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	logline={"fid":fid,"action":"download","time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),"ip":ip,"sfile":sfile,"dfile":dfile,"result":"ERR","user":user,"msg":"","size":"0KB","lasttime":lasttime}
+	logline={"fid":fid,"action":"download","time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),"ip":ip,"sfile":sfile,"dfile":dfile,"result":False,"user":user,"msg":"","size":"0KB","lasttime":lasttime}
 
 	try:
 		t=paramiko.Transport((ip,int(port)))
@@ -68,9 +66,9 @@ def DownFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopasswo
 			else:
 				raise IOError(e)
 		sftp.get(sfile,"%s.%s" %(dfile,ip),callback=callback_info)
-		log(model,"OK")
-		info['status']='OK'
-		logline["result"]="OK"
+		log(model,True)
+		info['status']='True'
+		logline["result"]=True
 		cache_size_id="fid:size:%s" %(fid)
 		cache_size=cache.get(cache_size_id)
 		if cache_size is None:
@@ -88,10 +86,10 @@ def DownFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopasswo
 		msg=str(e)
 		print msg
 		info["content"]=msg
-		info["status"]='ERR'
+		info["status"]='False'
 		log(model,msg)
 		cache.set("info:%s"%(fid),info,360000)
-		logline["result"]="ERR"
+		logline["result"]=False
 		logline["msg"]=msg
 		cache_translog=cache.get("translog")
 		print "抓取到异常...",e
@@ -106,10 +104,10 @@ def UploadFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopass
 	print "开始上传..........."
 	socket.setdefaulttimeout(3)
 	model="transfile_getfile_upload"
-	info={"msgtype":"OK","content":"","status":"running","progres":"0"}
+	info={"status":True,"content":"","status":"running","progres":"0"}
 	translog=[]
 	lasttime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
-	logline={"fid":fid,"action":"upload","time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),"ip":ip,"sfile":sfile,"dfile":dfile,"result":"ERR","user":user,"msg":"","size":"0KB","lasttime":lasttime}
+	logline={"fid":fid,"action":"upload","time":time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()),"ip":ip,"sfile":sfile,"dfile":dfile,"result":False,"user":user,"msg":"","size":"0KB","lasttime":lasttime}
 	try:
 		t=paramiko.Transport((ip,int(port)))
 		if loginmethod=="key".upper():
@@ -142,10 +140,10 @@ def UploadFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopass
 			print sfile,dfile
 			callback_info = functools.partial(set_progres,fid,1,1,False)
 			sftp.put(sfile,dfile,callback=callback_info)
-			log(model,"OK")
-			logline["result"]="OK"
-			info["status"]="OK"
-			info["msgtype"]="OK"
+			log(model,True)
+			logline["result"]=True
+			info["status"]=True
+			info["status"]=True
 			cache_size_id="fid:size:%s" %(fid)
 			cache_size=cache.get(cache_size_id)
 			if cache_size is None:
@@ -162,15 +160,14 @@ def UploadFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopass
 				cache_translog=translog
 			cache.set("translog",cache_translog,3600000000)
 	except Exception,e:
-		print "报错",e
 		msg=str(e)
 		print msg
 		info["content"]=msg
 		log(model,msg)
 		cache.set("info:%s"%(fid),info,360000)
-		logline["result"]="ERR"
-		info["msgtype"]="OK"
-		info["status"]="ERR"
+		logline["result"]=False
+		info["status"]=True
+		info["status"]=False
 		logline["msg"]=msg
 		print "抓取到异常...",e
 		logline["result"]=msg
@@ -182,12 +179,14 @@ def UploadFile(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopass
 			cache_translog=translog
 		cache.set("translog",cache_translog,3600000000)
 		cache.set("info:%s"%(fid),info,600)
-		return error_linenumber.get_linen_umber_function_name()[1]
+		
+		print 111111111111111111
+		return False,"未知错误"
 	else:
 		t.close()
 def resove_conf(conf,fid,user,action):
 	model="transfile_getfile_resove_conf"
-	info={"msgtype":"ERR","content":""}
+	info={"status":False,"content":""}
 	try:
 		id=conf["id"]
 		dfile=conf["dfile"]
@@ -222,13 +221,15 @@ def resove_conf(conf,fid,user,action):
 		log(model,msg)
 		info["content"]=msg
 		cache.set("info:%s" % (fid),info,360000)
-		return error_linenumber.get_linen_umber_function_name()[1]
+		
+		return False
 	if action=="upload":
 		b=threading.Thread(target=UploadFile,args=(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopassword,loginmethod,keyfile,fid,user))
 	else:
 		b=threading.Thread(target=DownFile,args=(dfile,sfile,username,password,ip,port,su,supassword,sudo,sudopassword,loginmethod,keyfile,fid,user))
 		
 	b.start()
+	b.join()
 def getconf(host,fid,user,action):
 	
 	
@@ -239,11 +240,11 @@ def getconf(host,fid,user,action):
 			host=eval(host)
 			if not type(host)==type({}):
 				log(model,"GXXCXXF0000000001") 
-				return False
+				return False,"GXXCXXF0000000001"
 	except Exception,e:
 		log(model,str(e))
-		print "有错误",e
-		return False
+		print 22222222222,e
+		return False,"未知错误"
 	try:
 		try:
 			hostconf=cache.get('allconf')
@@ -251,10 +252,12 @@ def getconf(host,fid,user,action):
 			log(model,str(e))
 		hostconf=hostconf['content'][host['id']]
 		
+	except KeyError:
+		return False,"SXX0000000000001019" 
 	except Exception,e:
-		
 		log(model,str(e))
-		return False
+		print e,111111111111111111
+		return False,"未知错误"
 	hostconf["sfile"]=host["sfile"]
 	if action=="download":
 		hostconf["dfile"]=os.path.basename(host["sfile"])

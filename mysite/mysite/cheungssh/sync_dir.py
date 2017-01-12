@@ -3,7 +3,7 @@
 import os,sys,paramiko
 import functools
 def UploadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progres,port=22,force=True):
-	info={'msgtype':"OK"}
+	info={'status':True}
 	if not ddir.endswith('/'):
 		ddir=ddir+"/"
 	if not sdir.endswith('/'):
@@ -23,7 +23,7 @@ def UploadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progre
 			sftp.stat(ddir)
 		except Exception,e:
 			if e.errno==2 and not force:
-				print '-ERR','远程目录不存在'
+				print '-False','远程目录不存在'
 				return False,"Remote directory not  exists"
 		all_dirs=[]
 		all_files=[]
@@ -45,7 +45,7 @@ def UploadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progre
 						if e.errno==2:
 							sftp.mkdir(remote_and_local_dir)
 						else:
-							print '-ERR'
+							print '-False'
 							return False,e
 			for file in files:
 				local_full_file=os.path.join(root,file)
@@ -54,7 +54,7 @@ def UploadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progre
 				try:
 					sftp.put(local_full_file,new_remote_full_file)
 				except Exception,e:
-					print '-ERR'
+					print '-False'
 					return False,e"""
 		all_file_num=len(all_files)
 		ifile=1
@@ -65,18 +65,18 @@ def UploadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progre
 				print 11111111111111111111111111111111111111111
 				sftp.put(local_full_file,new_remote_full_file,callback=callback_info)
 			except Exception,e:
-				print '-ERR错误aaaaaaaaaaaaaaaaaaaaaa',e
+				print '-False错误aaaaaaaaaaaaaaaaaaaaaa',e
 				return False,e
 			
 			ifile+=1
-		print "+OK文件传输结束"
+		print "+True文件传输结束"
 		if not all_files:set_progres(fid,1,1,True,1,1)
-		return True,"+OK"
+		return True,"+True"
 	except Exception,e:
 		print '发生错误',e
 		return False,e
 def DownloadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_progres,port=22,force=True):
-	info={'msgtype':"OK"}
+	info={'status':True}
 	if not ddir.endswith('/'):
 		ddir=ddir+"/"
 	if not sdir.endswith('/'):
@@ -96,7 +96,7 @@ def DownloadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_prog
 			sftp.stat(sdir)
 		except Exception,e:
 			if e.errno==2 and not force:
-				print '-ERR','远程目录不存在'
+				print '-False','远程目录不存在'
 				return False,"Remote directory not  exists"
 		all_dirs=[]
 		all_files=[]
@@ -118,7 +118,7 @@ def DownloadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_prog
 						if e.errno==2:
 							sftp.mkdir(remote_and_local_dir)
 						else:
-							print '-ERR'
+							print '-False'
 							return False,e
 			for file in files:
 				local_full_file=os.path.join(root,file)
@@ -127,7 +127,7 @@ def DownloadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_prog
 				try:
 					sftp.put(local_full_file,new_remote_full_file)
 				except Exception,e:
-					print '-ERR'
+					print '-False'
 					return False,e"""
 		all_file_num=len(all_files)
 		ifile=1
@@ -138,13 +138,13 @@ def DownloadFile(sdir,ddir,username,password,ip,loginmethod,keyfile,fid,set_prog
 				print 11111111111111111111111111111111111111111
 				sftp.put(local_full_file,new_remote_full_file,callback=callback_info)
 			except Exception,e:
-				print '-ERR错误aaaaaaaaaaaaaaaaaaaaaa',e
+				print '-False错误aaaaaaaaaaaaaaaaaaaaaa',e
 				return False,e
 			
 			ifile+=1
-		print "+OK文件传输结束"
+		print "+True文件传输结束"
 		if not all_files:set_progres(fid,1,1,True,1,1)
-		return True,"+OK"
+		return True,"+True"
 	except Exception,e:
 		print '发生错误',e
 		return False,e

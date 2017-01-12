@@ -5,7 +5,7 @@ from models import ServerConf
 from django.core.cache import cache
 def db_to_redis(id):
 	Data=ServerConf.objects.all()
- 	hostinfo={"msgtype":"host","content":[]}
+ 	hostinfo={"status":"host","content":[]}
 	for a in Data:
 		if not str(a.id)==str(id):
 			continue

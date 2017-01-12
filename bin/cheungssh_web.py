@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #coding:utf8
-#Author=Cheung Kei-Chuen
-#QQ=2418731289 
+#Author=张其川
+#官方QQ群=2418731289 
 VERSION=131
 import socket,os,sys,db_to_redis_allconf,cheungssh_su,cheungssh_sudo
 socket.setdefaulttimeout(3)
@@ -11,6 +11,14 @@ from mysite.cheungssh.models import ServerConf
 from django.core.cache import cache
 import json
 from redis_to_redis import set_redis_data
+def ip_to_id(Data):
+	Data.FailID=[]
+	for ip in Data.FailIP:
+		for id in Data.conf.keys(): 
+			if Data.conf[id]['ip']==ip:     
+				Data.FailID.append(id)
+			
+	
 def SSH_cmd(ip,username,password,port,loginmethod,keyfile,cmd,ie_key,group,Data,tid):
 	PROFILE=". /etc/profile 2&>/dev/null;. ~/.bash_profile 2&>/dev/null;. /etc/bashrc 2&>/dev/null;. ~/.bashrc 2&>/dev/null;"
 	PATH="export PATH=$PATH:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin;"
@@ -144,6 +152,8 @@ def main(cmd,ie_key,selectserver,Data,tid,excutetype='cmd',hwtype='CPU'):
 			b=threading.Thread(target=SSH_cmd,args=(Data.conf[id]["ip"],Data.conf[id]["username"],Data.conf[id]["password"],Data.conf[id]["port"],Data.conf[id]["loginmethod"],keyfile,cmd,ie_key,Data.conf[id]["group"],Data,tid))
 		b.start()
 	b.join()
+	ip_to_id(Data)
+	cache.set(ie_key,Data.FailID,864000)
 if __name__=='__main__':
 	from DataConf import DataConf
 	Data=DataConf()

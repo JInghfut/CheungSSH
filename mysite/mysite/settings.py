@@ -1,7 +1,7 @@
 # Django settings for mysite project.
 #coding:utf-8
 #APPEND_SLASH=False
-DEBUG = True
+DEBUG=True
 #CACHE_BACKEND = 'locmem:///'
 #CACHE_BACKEND = 'memcached://127.0.0.1:11211/'
 
@@ -50,7 +50,7 @@ TIME_ZONE = 'Asia/Hong_Kong'
 # Language code for this installation. All choices can be found here:
 # http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = 'zh-cn'
-DEFAULT_CHARSET='utf-8'
+DEFAULT_CHARSET='utf-8' 
 
 SITE_ID = 1
 
@@ -152,13 +152,14 @@ CORS_ALLOW_HEADERS = (
         'accept',
         'origin',
         'authorization',
+	'cache-control', 
         'x-csrftoken'
     )
 INSTALLED_APPS = (
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-	'corsheaders', ####
+	'corsheaders', 
     #'django.contrib.sites',
     #'mysite.books',
     'mysite.cheungssh',
@@ -201,3 +202,6 @@ LOGGING = {
         },
     }
 }
+
+
+

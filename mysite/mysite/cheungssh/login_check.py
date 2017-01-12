@@ -1,7 +1,11 @@
 #coding:utf-8
-import time,IP,json
+import time,IP,json,os,sys
 from django.core.cache import cache
 from django.http import HttpResponse
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mysite.settings")
+sys.path.append('/home/cheungssh/mysite')
+sys.path.append('/home/cheungssh/mysite/mysite/cheungssh')
+REDIS=cache.master_client
 def login_check(page='未知页面',isRecord=True):
 	def decorator(func):
 		def login_auth_check(request,*args,**kws):
@@ -11,33 +15,28 @@ def login_check(page='未知页面',isRecord=True):
 				request_content=request.GET
 			callback=request.GET.get('callback')
 			info={}
-			info['accesstime']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
-			info['URL']=  "%s?%s"   %(request.META['PATH_INFO'],request.META['QUERY_STRING'])
-			info['IP']=request.META['REMOTE_ADDR']
+			info['time']=time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
+			info['url']=  "%s?%s"   %(request.META['PATH_INFO'],request.META['QUERY_STRING'])
+			info['ip']=request.META['REMOTE_ADDR']
 			info['page']=page
 			info['request_content']=request_content
-			info['IPLocat']=IP.find(info['IP'])
+			info['ip_locate']=IP.find(info['ip'])
 			isAuth=False
 			if request.user.is_authenticated():
 				info["username"]=request.user.username
 				isAuth=True
-			else:
-				info["username"]="非认证用户"
-			login_record=cache.get('login_record')
-			if not login_record:login_record=[]
-			login_record.insert(0,info)
-			if isRecord:
-				cache.set('login_record',login_record,8640000000) 
 			if isAuth:
+				if isRecord:
+					_info=json.dumps(info,encoding="utf8",ensure_ascii=False)
+					REDIS.lpush("CHB-R0000000010A-A",_info)			
 				return func(request,*args,**kws)
 			else:
-				backinfo={'msgtype':'login'}
-				backinfo=json.dumps(backinfo)
+				backinfo={'status':'login'}
+				backinfo=json.dumps(backinfo,encoding="utf8",ensure_ascii=False)
 				if callback:
 					info="%s(%s)"  % (callback,backinfo)
 				else:
 					info="%s"  % (backinfo)
 				return HttpResponse(info)
-			
 		return login_auth_check
 	return decorator
